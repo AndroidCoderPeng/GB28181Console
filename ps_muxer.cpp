@@ -68,6 +68,19 @@ static void buildPsPacket(const uint8_t* payload, const size_t len, const uint64
     // 添加 PES 载荷数据
     std::memcpy(ps_pkt.data() + offset, payload, len);
 
+    // 打印前24字节
+    if (ps_pkt.size() >= 24)
+    {
+        std::string str;
+        for (int i = 0; i < 24; ++i)
+        {
+            char hex_byte[8];
+            snprintf(hex_byte, sizeof(hex_byte), "%02X ", ps_pkt[i]);
+            str += hex_byte;
+        }
+        std::cout << "PS Packet First 24 Bytes: " << str << std::endl;
+    }
+
     // 发送PS包。关键帧（I帧）通常是一组帧序列的最后一帧或开始帧
     RtpSender::get()->sendDataPacket(ps_pkt.data(), ps_pkt.size(), is_key_frame, pts);
 }
