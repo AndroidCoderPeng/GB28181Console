@@ -14,9 +14,6 @@
 #define AUDIO_CHANNEL 1
 #define AUDIO_BUFFER_SIZE 1024
 
-#define REGISTER_EXPIRED_TIME 7200 // 注册有效期
-#define HEARTBEAT_INTERVAL 30 // 心跳间隔
-
 #define STREAM_TYPE_H264 0x1B // 视频Stream Type
 #define STREAM_TYPE_SVAC_VIDEO 0x80 // 视频Stream Type
 

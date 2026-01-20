@@ -64,6 +64,7 @@ add_executable(GB28181Console
         pcm_encoder.cpp
         ps_muxer.cpp
         rtp_sender.cpp
+        frame_encoder.cpp
 )
 
 target_link_libraries(GB28181Console

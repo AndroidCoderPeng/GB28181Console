@@ -4,16 +4,15 @@
 #include <opencv2/opencv.hpp>
 
 #include "base_config.hpp"
+#include "frame_encoder.hpp"
 #include "sip_register.hpp"
-#include "video_frame_encoder.hpp"
 
 bool is_video_capturing = false;
 std::queue<std::shared_ptr<cv::Mat>> capture_frame_queue;
 std::mutex capture_queue_mutex;
 std::condition_variable capture_queue_cv;
 bool is_registered = false;
-bool is_pushing_stream = false;
-VideoFrameEncoder* video_encoder_ptr = nullptr;
+FrameEncoder* frame_encoder_ptr = nullptr;
 
 void captureFrame(cv::VideoCapture& capture)
 {
@@ -31,7 +30,7 @@ void captureFrame(cv::VideoCapture& capture)
                 std::lock_guard<std::mutex> lock(capture_queue_mutex);
                 if (capture_frame_queue.size() >= VIDEO_FPS)
                 {
-                    // 队列长度超过30帧，则丢弃旧帧
+                    // 队列长度超过25帧，则丢弃旧帧
                     capture_frame_queue.pop();
                 }
                 capture_frame_queue.push(shared_frame);
@@ -44,12 +43,12 @@ void captureFrame(cv::VideoCapture& capture)
             break;
         }
 
-        // 控制帧率 (约33ms间隔对应30fps)
+        // 控制帧率 (40ms间隔对应25fps)
         auto end_time = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        if (elapsed.count() < 33)
+        if (elapsed.count() < 40)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(33 - elapsed.count()));
+            std::this_thread::sleep_for(std::chrono::milliseconds(40 - elapsed.count()));
         }
     }
 }
@@ -79,9 +78,9 @@ void consumeFrame()
             }
         }
 
-        if (mat_ptr && is_pushing_stream && is_video_capturing)
+        if (mat_ptr && is_video_capturing)
         {
-            detection_worker_ptr->detectFrame(mat_ptr);
+            frame_encoder_ptr->encodeFrame(*mat_ptr);
         }
     }
 }
@@ -98,9 +97,9 @@ int main()
     }
 
     // 设置分辨率
-    capture.set(cv::CAP_PROP_FRAME_WIDTH, FRAME_WIDTH);
-    capture.set(cv::CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
-    capture.set(cv::CAP_PROP_FPS, VIDEO_FPS); // 决定了摄像头硬件的最大输出频率
+    capture.set(cv::CAP_PROP_FRAME_WIDTH, VIDEO_WIDTH);
+    capture.set(cv::CAP_PROP_FRAME_HEIGHT, VIDEO_HEIGHT);
+    capture.set(cv::CAP_PROP_FPS, VIDEO_FPS);
 
     // 视频捕获线程-生产者
     std::thread capture_producer_thread(captureFrame, std::ref(capture));
@@ -125,14 +124,14 @@ int main()
         "1234qwer",
         116.3975,
         39.9085);
-    sip_register->sipEventCallback([](const int code, const std::string& message)
+    sip_register->setSipEventCallback([](const int code, const std::string& message)
     {
         if (code == 200)
         {
             is_registered = true;
             // 初始化编码器
-            video_encoder_ptr = new VideoFrameEncoder();
-            if (!video_encoder_ptr->prepare())
+            frame_encoder_ptr = new FrameEncoder();
+            if (!frame_encoder_ptr->prepare())
             {
                 std::cerr << "Failed to prepare video encoder" << std::endl;
             }
@@ -143,11 +142,11 @@ int main()
         }
         else if (code == 1000)
         {
-            is_pushing_stream = true;
+            frame_encoder_ptr->startStream();
         }
         else if (code == 1001)
         {
-            is_pushing_stream = false;
+            frame_encoder_ptr->stopStream();
         }
         else
         {
