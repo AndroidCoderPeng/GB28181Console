@@ -59,8 +59,6 @@ add_executable(GB28181Console
         xml_builder.cpp
         sdp_parser.cpp
         sip_register.cpp
-        detection_worker.cpp
-        video_frame_encoder.cpp
         utils.cpp
         header_builder.cpp
         pcm_encoder.cpp

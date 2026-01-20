@@ -9,9 +9,10 @@
 
 #include "pugixml.hpp"
 
-std::string XmlBuilder::buildDeviceInfo(const std::string &sn, const std::string &device_code,
-                                        const std::string &device_name,
-                                        const std::string &serial_number) {
+std::string XmlBuilder::buildDeviceInfo(const std::string& sn, const std::string& device_code,
+                                        const std::string& device_name,
+                                        const std::string& serial_number)
+{
     std::cout << "Build DeviceInfo: " << std::endl;
     pugi::xml_document xml;
     // 添加 XML 声明：<?xml version="1.0" encoding="GB2312"?>
@@ -27,7 +28,7 @@ std::string XmlBuilder::buildDeviceInfo(const std::string &sn, const std::string
     root.append_child("DeviceID").text() = device_code.c_str();
     root.append_child("DeviceName").text() = device_name.c_str();
     root.append_child("Manufacturer").text() = "CasicGBDevice";
-    root.append_child("Model").text() = "AndroidPhone";
+    root.append_child("Model").text() = "GBDevice";
     root.append_child("Firmware").text() = "1.0.0";
     root.append_child("SerialNumber").text() = serial_number.c_str();
     root.append_child("Status").text() = "ON";
@@ -40,8 +41,9 @@ std::string XmlBuilder::buildDeviceInfo(const std::string &sn, const std::string
     return oss.str();
 }
 
-std::string XmlBuilder::buildCatalog(const std::string &sn, const std::string &device_code,
-                                     const std::string &server_domain, double longitude, double latitude) {
+std::string XmlBuilder::buildCatalog(const std::string& sn, const std::string& device_code,
+                                     const std::string& server_domain, double longitude, double latitude)
+{
     std::cout << "Build Catalog: " << std::endl;
     pugi::xml_document xml;
     // 添加 XML 声明
@@ -70,7 +72,7 @@ std::string XmlBuilder::buildCatalog(const std::string &sn, const std::string &d
     item.append_child("DeviceID").text() = channel_id.c_str();
     item.append_child("Name").text() = "Channel01";
     item.append_child("Manufacturer").text() = "CasicGBDevice";
-    item.append_child("Model").text() = "AndroidPhone";
+    item.append_child("Model").text() = "GBDevice";
     item.append_child("Owner").text() = "Pengxh";
     item.append_child("CivilCode").text() = server_domain.c_str();
     item.append_child("Address").text() = "";
@@ -98,7 +100,8 @@ std::string XmlBuilder::buildCatalog(const std::string &sn, const std::string &d
     return oss.str();
 }
 
-std::string XmlBuilder::buildHeartbeat(const std::string &sn, const std::string &device_code) {
+std::string XmlBuilder::buildHeartbeat(const std::string& sn, const std::string& device_code)
+{
     std::cout << "Build Keepalive: " << std::endl;
     pugi::xml_document xml;
     // 添加 XML 声明

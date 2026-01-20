@@ -16,29 +16,34 @@
 #include <fcntl.h>
 #include <iomanip>
 
-static uint32_t randomSsrc() {
+static uint32_t randomSsrc()
+{
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint32_t> dis;
     return dis(gen);
 }
 
-int RtpSender::initRtpTcpSocket(const SdpStruct &sdp) {
-    if (_rtp_socket > 0) {
+int RtpSender::initRtpTcpSocket(const SdpStruct& sdp)
+{
+    if (_rtp_socket > 0)
+    {
         close(_rtp_socket);
         _rtp_socket = -1;
     }
 
     // 创建 TCP socket
     _rtp_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (_rtp_socket < 0) {
+    if (_rtp_socket < 0)
+    {
         std::cerr << "Create tcp socket failed" << std::endl;
         return -1;
     }
 
     // 设置为非阻塞（可选，但建议与 UDP 一致）
     const int flags = fcntl(_rtp_socket, F_GETFL, 0);
-    if (flags == -1 || fcntl(_rtp_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (flags == -1 || fcntl(_rtp_socket, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
         std::cerr << "Create tcp socket failed" << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
@@ -49,7 +54,8 @@ int RtpSender::initRtpTcpSocket(const SdpStruct &sdp) {
     sockaddr_in remote_addr{};
     remote_addr.sin_family = AF_INET;
     remote_addr.sin_port = htons(sdp.remote_port); // 如 30465
-    if (inet_pton(AF_INET, sdp.remote_host.c_str(), &remote_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, sdp.remote_host.c_str(), &remote_addr.sin_addr) <= 0)
+    {
         std::cerr << "Invalid destination host:" << sdp.remote_host << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
@@ -57,11 +63,13 @@ int RtpSender::initRtpTcpSocket(const SdpStruct &sdp) {
     }
 
     // 主动连接平台
-    const int ret = connect(_rtp_socket, reinterpret_cast<struct sockaddr *>(&remote_addr), sizeof(remote_addr));
-    if (ret < 0) {
-        if (errno != EINPROGRESS) {
+    const int ret = connect(_rtp_socket, reinterpret_cast<struct sockaddr*>(&remote_addr), sizeof(remote_addr));
+    if (ret < 0)
+    {
+        if (errno != EINPROGRESS)
+        {
             std::cerr << "Connect" << sdp.remote_host << ":" << sdp.remote_port
-                    << "failed, errno=" << errno << std::endl;
+                << "failed, errno=" << errno << std::endl;
             close(_rtp_socket);
             _rtp_socket = -1;
             return -1;
@@ -78,15 +86,18 @@ int RtpSender::initRtpTcpSocket(const SdpStruct &sdp) {
     return 9; //虽然 TCP 不用端口，但 GB28181 要求写 9（discard port）或任意非零值。写 0 可能被解析为无效。
 }
 
-int RtpSender::initRtpUdpSocket(const SdpStruct &sdp) {
-    if (_rtp_socket > 0) {
+int RtpSender::initRtpUdpSocket(const SdpStruct& sdp)
+{
+    if (_rtp_socket > 0)
+    {
         close(_rtp_socket);
         _rtp_socket = -1;
     }
 
     // 创建 socket
     _rtp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (_rtp_socket < 0) {
+    if (_rtp_socket < 0)
+    {
         std::cerr << "Create rtp socket failed" << std::endl;
         return -1;
     }
@@ -97,7 +108,8 @@ int RtpSender::initRtpUdpSocket(const SdpStruct &sdp) {
     local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     local_addr.sin_port = htons(0); // Let OS choose
 
-    if (bind(_rtp_socket, reinterpret_cast<sockaddr *>(&local_addr), sizeof(local_addr)) < 0) {
+    if (bind(_rtp_socket, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0)
+    {
         std::cerr << "Bind rtp socket failed" << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
@@ -106,7 +118,8 @@ int RtpSender::initRtpUdpSocket(const SdpStruct &sdp) {
 
     sockaddr_in bound_addr{};
     socklen_t bound_len = sizeof(bound_addr);
-    if (getsockname(_rtp_socket, reinterpret_cast<sockaddr *>(&bound_addr), &bound_len) < 0) {
+    if (getsockname(_rtp_socket, reinterpret_cast<sockaddr*>(&bound_addr), &bound_len) < 0)
+    {
         std::cerr << "Allocate local port failed" << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
@@ -118,7 +131,8 @@ int RtpSender::initRtpUdpSocket(const SdpStruct &sdp) {
     memset(&_remote_addr, 0, sizeof(_remote_addr));
     _remote_addr.sin_family = AF_INET;
     _remote_addr.sin_port = htons(sdp.remote_port);
-    if (inet_pton(AF_INET, sdp.remote_host.c_str(), &_remote_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, sdp.remote_host.c_str(), &_remote_addr.sin_addr) <= 0)
+    {
         std::cout << "Invalid destination host:" << sdp.remote_host << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
@@ -127,14 +141,16 @@ int RtpSender::initRtpUdpSocket(const SdpStruct &sdp) {
 
     // 设置 Socket 为非阻塞模式
     const int flags = fcntl(_rtp_socket, F_GETFL, 0);
-    if (flags == -1) {
+    if (flags == -1)
+    {
         std::cerr << "Create rtp socket failed" << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
         return -1;
     }
 
-    if (fcntl(_rtp_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (fcntl(_rtp_socket, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
         std::cerr << "Create rtp socket failed" << std::endl;
         close(_rtp_socket);
         _rtp_socket = -1;
@@ -144,33 +160,44 @@ int RtpSender::initRtpUdpSocket(const SdpStruct &sdp) {
     initSsrcSeq(sdp);
 
     std::cout << "Platform wants stream:" << sdp.remote_host << ":" << sdp.remote_port
-            << ", SSRC:" << sdp.ssrc << ", Local port:" << local_port << std::endl;;
+        << ", SSRC:" << sdp.ssrc << ", Local port:" << local_port << std::endl;;
     return local_port;
 }
 
-void RtpSender::initSsrcSeq(const SdpStruct &sdp) {
-    if (!sdp.ssrc.empty()) {
+void RtpSender::initSsrcSeq(const SdpStruct& sdp)
+{
+    if (!sdp.ssrc.empty())
+    {
         std::string y_hex = sdp.ssrc;
 
         // GB28181 的 y= 是十六进制字符串，但某些平台（如 ZLMediaKit）可能发送超过 8 字符（5+ 字节）
         // 根据行业惯例，取低 4 字节（最后 8 个十六进制字符）
-        if (y_hex.length() > 8) {
+        if (y_hex.length() > 8)
+        {
             y_hex = y_hex.substr(y_hex.length() - 8);
         }
 
         // 确保至少有 1 个字符
-        if (!y_hex.empty()) {
-            try {
+        if (!y_hex.empty())
+        {
+            try
+            {
                 // 按十六进制解析
                 _ssrc = static_cast<uint32_t>(std::stoul(y_hex, nullptr, 16));
-            } catch (const std::exception &e) {
+            }
+            catch (const std::exception& e)
+            {
                 _ssrc = randomSsrc();
                 std::cerr << "Failed to parse SSRC from y=" << sdp.ssrc << ", fallback to random" << std::endl;
             }
-        } else {
+        }
+        else
+        {
             _ssrc = randomSsrc();
         }
-    } else {
+    }
+    else
+    {
         _ssrc = randomSsrc();
     }
 
@@ -181,18 +208,22 @@ void RtpSender::initSsrcSeq(const SdpStruct &sdp) {
     _seq = static_cast<uint16_t>(dis16(gen));
 
     std::cout << "Initialized SSRC from y=" << sdp.ssrc << " -> 0x"
-            << std::hex << std::setfill('0') << std::setw(8) << _ssrc << std::endl;;
+        << std::hex << std::setfill('0') << std::setw(8) << _ssrc << std::endl;;
 }
 
-RtpSender::~RtpSender() {
-    if (_rtp_socket > 0) {
+RtpSender::~RtpSender()
+{
+    if (_rtp_socket > 0)
+    {
         close(_rtp_socket);
         _rtp_socket = -1;
     }
 }
 
-void RtpSender::sendDataPacket(const uint8_t *pkt, const size_t pkt_len, const bool is_end, const uint32_t timestamp) {
-    if (pkt_len <= MAX_RTP_PAYLOAD) {
+void RtpSender::sendDataPacket(const uint8_t* pkt, const size_t pkt_len, const bool is_end, const uint32_t timestamp)
+{
+    if (pkt_len <= MAX_RTP_PAYLOAD)
+    {
         // ========== 小包：单个 RTP 包 ==========
         uint8_t packet[MAX_RTP_PACKET]; // 确保 MAX_RTP_PACKET >= 12 + MAX_RTP_PAYLOAD
 
@@ -216,10 +247,13 @@ void RtpSender::sendDataPacket(const uint8_t *pkt, const size_t pkt_len, const b
         // 发送（根据 TCP/UDP 模式）
         send_tcp_or_udp_packet(packet, 12 + pkt_len);
         _seq++; // 序列号递增
-    } else {
+    }
+    else
+    {
         // ========== 大包，进行通用分片，在 GB28181 中，不使用 FU-A！ ==========
         size_t offset = 0;
-        while (offset < pkt_len) {
+        while (offset < pkt_len)
+        {
             const bool last_chunk = (offset + MAX_RTP_PAYLOAD >= pkt_len);
             const size_t chunk_size = last_chunk ? (pkt_len - offset) : MAX_RTP_PAYLOAD;
 
@@ -250,8 +284,10 @@ void RtpSender::sendDataPacket(const uint8_t *pkt, const size_t pkt_len, const b
     }
 }
 
-void RtpSender::send_tcp_or_udp_packet(const uint8_t *rtp_packet, const size_t rtp_len) {
-    if (_is_tcp) {
+void RtpSender::send_tcp_or_udp_packet(const uint8_t* rtp_packet, const size_t rtp_len)
+{
+    if (_is_tcp)
+    {
         // TCP interleaved 格式: $<channel><lenH><lenL><RTP>
         const uint8_t header[4] = {
             0x24, // '$'
@@ -262,12 +298,15 @@ void RtpSender::send_tcp_or_udp_packet(const uint8_t *rtp_packet, const size_t r
 
         // 发送 header
         const ssize_t sent = send(_rtp_socket, header, 4, MSG_NOSIGNAL);
-        if (sent == 4) {
+        if (sent == 4)
+        {
             // 发送 RTP 包体
             send(_rtp_socket, rtp_packet, rtp_len, MSG_NOSIGNAL);
         }
-    } else {
+    }
+    else
+    {
         // UDP 模式
-        sendto(_rtp_socket, rtp_packet, rtp_len, 0, reinterpret_cast<sockaddr *>(&_remote_addr), sizeof(_remote_addr));
+        sendto(_rtp_socket, rtp_packet, rtp_len, 0, reinterpret_cast<sockaddr*>(&_remote_addr), sizeof(_remote_addr));
     }
 }

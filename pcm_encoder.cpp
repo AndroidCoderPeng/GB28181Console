@@ -4,7 +4,8 @@
 
 #include "pcm_encoder.hpp"
 
-static uint8_t linear_to_alaw(const int16_t sample) {
+static uint8_t linear_to_alaw(const int16_t sample)
+{
     static const int seg_end[8] = {0xFF, 0x1FF, 0x3FF, 0x7FF, 0xFFF, 0x1FFF, 0x3FFF, 0x7FFF};
 
     const int sign = sample >> 8 & 0x80;
@@ -13,8 +14,10 @@ static uint8_t linear_to_alaw(const int16_t sample) {
     if (temp_sample > 32635) temp_sample = 32635;
 
     int seg = 0;
-    for (int i = 0; i < 8; i++) {
-        if (sample <= seg_end[i]) {
+    for (int i = 0; i < 8; i++)
+    {
+        if (sample <= seg_end[i])
+        {
             seg = i;
             break;
         }
@@ -25,7 +28,8 @@ static uint8_t linear_to_alaw(const int16_t sample) {
     return ~(sign | seg << 4 | quant);
 }
 
-static uint8_t linear_to_mulaw(const int16_t sample) {
+static uint8_t linear_to_mulaw(const int16_t sample)
+{
     static const int BIAS = 0x84;
     static const int CLIP = 32635;
 
@@ -37,7 +41,8 @@ static uint8_t linear_to_mulaw(const int16_t sample) {
     temp_sample += BIAS;
 
     int exponent = 7;
-    for (int mask = 0x4000; (temp_sample & mask) == 0 && exponent > 0; mask >>= 1) {
+    for (int mask = 0x4000; (temp_sample & mask) == 0 && exponent > 0; mask >>= 1)
+    {
         exponent--;
     }
 
@@ -45,14 +50,18 @@ static uint8_t linear_to_mulaw(const int16_t sample) {
     return ~(sign | exponent << 4 | mantissa);
 }
 
-void PcmEncoder::encode_to_alaw(const int16_t *pcm, uint8_t *alaw, const std::size_t samples) {
-    for (std::size_t i = 0; i < samples; ++i) {
+void PcmEncoder::encode_to_alaw(const int16_t* pcm, uint8_t* alaw, const std::size_t samples)
+{
+    for (std::size_t i = 0; i < samples; ++i)
+    {
         alaw[i] = linear_to_alaw(pcm[i]);
     }
 }
 
-void PcmEncoder::encode_to_mulaw(const int16_t *pcm, uint8_t *mulaw, const std::size_t samples) {
-    for (std::size_t i = 0; i < samples; ++i) {
+void PcmEncoder::encode_to_mulaw(const int16_t* pcm, uint8_t* mulaw, const std::size_t samples)
+{
+    for (std::size_t i = 0; i < samples; ++i)
+    {
         mulaw[i] = linear_to_mulaw(pcm[i]);
     }
 }
