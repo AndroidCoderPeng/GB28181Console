@@ -10,10 +10,6 @@
 #define VIDEO_FPS 25 // 视频帧率
 #define VIDEO_BIT_RATE 1500000 // 视频比特率 480P: 1-2 Mbps, 720P: 2-3 Mbps, 1080P: 3-6 Mbps
 
-#define AUDIO_SAMPLE_RATE 8000
-#define AUDIO_CHANNEL 1
-#define AUDIO_BUFFER_SIZE 1024
-
 #define STREAM_TYPE_H264 0x1B // 视频Stream Type
 #define STREAM_TYPE_SVAC_VIDEO 0x80 // 视频Stream Type
 

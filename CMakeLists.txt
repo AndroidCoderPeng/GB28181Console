@@ -45,26 +45,25 @@ endforeach ()
 # 查找 OpenCV
 find_package(OpenCV REQUIRED)
 
-# 输出 OpenCV 信息
-if (OpenCV_FOUND)
-    message(STATUS "OpenCV found:")
-    message(STATUS "  OpenCV_VERSION: ${OpenCV_VERSION}")
-else ()
-    message(WARNING "OpenCV not found")
-endif ()
-
 add_executable(GB28181Console
+        # 入口类
         main.cpp
+
+        # 核心业务类
+        frame_capture.cpp
+        frame_encoder.cpp
         pugixml.cpp
         xml_builder.cpp
         sdp_parser.cpp
+        rtp_sender.cpp
         sip_register.cpp
         utils.cpp
         header_builder.cpp
-        pcm_encoder.cpp
+        audio_processor.cpp
         ps_muxer.cpp
-        rtp_sender.cpp
-        frame_encoder.cpp
+        audio_receiver.cpp
+        error_code.cpp
+        ring_buffer.cpp
 )
 
 target_link_libraries(GB28181Console
