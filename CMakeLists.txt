@@ -59,11 +59,11 @@ add_executable(GB28181Console
         sip_register.cpp
         utils.cpp
         header_builder.cpp
-#        audio_processor.cpp
+        audio_processor.cpp
         ps_muxer.cpp
-#        audio_receiver.cpp
+        audio_receiver.cpp
         error_code.cpp
-#        ring_buffer.cpp
+        ring_buffer.cpp
 )
 
 target_link_libraries(GB28181Console

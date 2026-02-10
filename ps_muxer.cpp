@@ -5,17 +5,15 @@
 #include "ps_muxer.hpp"
 #include "base_config.hpp"
 #include "header_builder.hpp"
-#include "pcm_encoder.hpp"
+#include "audio_processor.hpp"
 #include "rtp_sender.hpp"
 #include "utils.hpp"
 
 #include <iostream>
 
-static void print(const std::string& tag, const std::vector<uint8_t>& data)
-{
+static void print(const std::string& tag, const std::vector<uint8_t>& data) {
     std::string str;
-    for (const unsigned char s : data)
-    {
+    for (const unsigned char s : data) {
         char hex_byte[8];
         snprintf(hex_byte, sizeof(hex_byte), "%02X ", s);
         str += hex_byte;
@@ -34,15 +32,13 @@ static void print(const std::string& tag, const std::vector<uint8_t>& data)
  * @param pts
  * @param is_key_frame
  * */
-static void buildPsPacket(const uint8_t* payload, const size_t len, const uint64_t pts, const bool is_key_frame)
-{
+static void buildPsPacket(const uint8_t* payload, const size_t len, const uint64_t pts, const bool is_key_frame) {
     // ================================ 添加PS头 ================================//
     const auto ps_header = HeaderBuilder::buildPsPackHeader(pts);
 
     // ================================ 添加系统头和PSM ================================//
     std::vector<uint8_t> config{};
-    if (is_key_frame)
-    {
+    if (is_key_frame) {
         config = HeaderBuilder::buildSystemHeader(VIDEO_STREAM_ID,AUDIO_STREAM_ID);
         auto psm = HeaderBuilder::buildPsMap();
         config.insert(config.end(), psm.begin(), psm.end());
@@ -59,27 +55,13 @@ static void buildPsPacket(const uint8_t* payload, const size_t len, const uint64
     offset += ps_header.size();
 
     // 添加 System Header 和 PSM（如果存在）
-    if (!config.empty())
-    {
+    if (!config.empty()) {
         std::memcpy(ps_pkt.data() + offset, config.data(), config.size());
         offset += config.size();
     }
 
     // 添加 PES 载荷数据
     std::memcpy(ps_pkt.data() + offset, payload, len);
-
-    // 打印前24字节
-    if (ps_pkt.size() >= 24)
-    {
-        std::string str;
-        for (int i = 0; i < 24; ++i)
-        {
-            char hex_byte[8];
-            snprintf(hex_byte, sizeof(hex_byte), "%02X ", ps_pkt[i]);
-            str += hex_byte;
-        }
-        std::cout << "PS Packet First 24 Bytes: " << str << std::endl;
-    }
 
     // 发送PS包。关键帧（I帧）通常是一组帧序列的最后一帧或开始帧
     RtpSender::get()->sendDataPacket(ps_pkt.data(), ps_pkt.size(), is_key_frame, pts);
@@ -102,9 +84,8 @@ static void buildPsPacket(const uint8_t* payload, const size_t len, const uint64
  * @param is_key_frame
  * */
 static void buildPesPacket(const uint8_t stream_id, const uint8_t* payload, const size_t len, const uint64_t pts_90k,
-                           const bool is_key_frame)
-{
-    std::vector<uint8_t> pes_header = HeaderBuilder::buildPesHeader(stream_id, len, pts_90k, is_key_frame);
+                           const bool is_key_frame) {
+    std::vector<uint8_t> pes_header = HeaderBuilder::buildPesHeader(stream_id, len, pts_90k);
 
     // ================================ 封装 PES 包 ================================//
     // 不必管是SPS/PPS/G.711μ/IDR/P，这些都是PES的载荷，载荷位置 = 动态的，由第9字节决定。
@@ -130,14 +111,11 @@ static void buildPesPacket(const uint8_t stream_id, const uint8_t* payload, cons
  * - IDR帧：由一个IDR类型的NALU构成
  * - P帧：由一个或多个P slice类型的NALU构成
  * */
-void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, const size_t size)
-{
+void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, const size_t size) {
     std::lock_guard<std::mutex> lock(_muxer_mutex);
 
     const auto nalUnits = Utils::splitNalUnits(h264_data, size);
-    if (nalUnits.empty())
-    {
-        std::cerr << "[VIDEO] Empty NALU, dropping frame" << std::endl;
+    if (!Utils::validateNalUnits(nalUnits)) {
         return;
     }
 
@@ -151,37 +129,33 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
     idr_frames.reserve(2); // 通常关键帧包含1-2个IDR帧
 
     // 解析NALUs并识别SPS/PPS/IDR
-    for (const auto& nalu : nalUnits)
-    {
-        if (nalu.empty()) continue;
+    for (const auto& nalu : nalUnits) {
+        if (nalu.empty())
+            continue;
         const uint8_t nalType = nalu[0] & 0x1F;
-        switch (nalType)
-        {
-        case 5: // IDR帧
-            has_idr_frame = true;
-            idr_frames.emplace_back(nalu); // 使用emplace_back避免拷贝
-            break;
-        case 6: // SEI
-            break;
-        case 7: // SPS
-            sps = nalu;
-            _sps_cache = nalu;
-            break;
-        case 8: // PPS
-            pps = nalu;
-            _pps_cache = nalu;
-            break;
-        default:
-            break;
+        switch (nalType) {
+            case 5: // IDR帧
+                has_idr_frame = true;
+                idr_frames.emplace_back(nalu); // 使用emplace_back避免拷贝
+                break;
+            case 6: // SEI
+                break;
+            case 7: // SPS
+                sps = nalu;
+                _sps_cache = nalu;
+                break;
+            case 8: // PPS
+                pps = nalu;
+                _pps_cache = nalu;
+                break;
+            default:
+                break;
         }
     }
 
     // 等待接收到第一个IDR帧才开始处理
-    if (_is_waiting_for_idr)
-    {
-        if (!has_idr_frame)
-        {
-            std::cerr << "[VIDEO] Waiting for first IDR, dropping frame" << std::endl;
+    if (_is_waiting_for_idr) {
+        if (!has_idr_frame) {
             return;
         }
         _is_waiting_for_idr = false;
@@ -189,19 +163,16 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
     }
 
     // 如果是关键帧，先打包 SPS+PPS+IDR
-    if (has_idr_frame)
-    {
+    if (has_idr_frame) {
         // 总是使用当前帧中的SPS/PPS，如果存在则更新缓存
-        if (!sps.empty() && !pps.empty())
-        {
+        if (!sps.empty() && !pps.empty()) {
             // 使用move避免拷贝
             _sps_cache = std::move(sps);
             _pps_cache = std::move(pps);
         }
 
         // 检查SPS/PPS缓存是否有效
-        if (_sps_cache.empty() || _pps_cache.empty())
-        {
+        if (_sps_cache.empty() || _pps_cache.empty()) {
             std::cerr << "[VIDEO] No SPS/PPS available, dropping key frame" << std::endl;
             return;
         }
@@ -214,72 +185,58 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
         HeaderBuilder::insertStartCode(pes_payload, _pps_cache.data(), _pps_cache.size());
 
         // 直接添加IDR数据到同一个向量，避免额外的拷贝
-        for (const auto& idr_nalu : idr_frames)
-        {
+        for (const auto& idr_nalu : idr_frames) {
             HeaderBuilder::insertStartCode(pes_payload, idr_nalu.data(), idr_nalu.size());
         }
 
         // 封装IDR帧为PES包（标记为关键帧）
-        if (!pes_payload.empty())
-        {
+        if (!pes_payload.empty()) {
             buildPesPacket(VIDEO_STREAM_ID, pes_payload.data(), pes_payload.size(), pts_90k, true);
             _is_idr_sent = true;
         }
-    }
-    else
-    {
+    } else {
         // 处理非IDR帧（P/B帧）
         std::vector<uint8_t> pes_payload;
 
         // 预分配空间，避免多次重新分配
         size_t estimated_size = 0;
-        for (const auto& nalu : nalUnits)
-        {
-            if (!nalu.empty())
-            {
+        for (const auto& nalu : nalUnits) {
+            if (!nalu.empty()) {
                 const uint8_t nal_type = nalu[0] & 0x1F;
-                if (nal_type != 7 && nal_type != 8)
-                {
+                if (nal_type != 7 && nal_type != 8) {
                     estimated_size += nalu.size() + 4; // 起始码大小
                 }
             }
         }
 
-        if (estimated_size > 0)
-        {
+        if (estimated_size > 0) {
             pes_payload.reserve(estimated_size);
         }
 
         // 构建PES载荷
-        for (const auto& nalu : nalUnits)
-        {
-            if (nalu.empty()) continue;
+        for (const auto& nalu : nalUnits) {
+            if (nalu.empty())
+                continue;
             const uint8_t nal_type = nalu[0] & 0x1F;
             // 跳过SPS/PPS，只处理帧数据
-            if (nal_type != 7 && nal_type != 8)
-            {
+            if (nal_type != 7 && nal_type != 8) {
                 HeaderBuilder::insertStartCode(pes_payload, nalu.data(), nalu.size());
             }
         }
 
         // 封装非关键帧
-        if (!pes_payload.empty())
-        {
+        if (!pes_payload.empty()) {
             buildPesPacket(VIDEO_STREAM_ID, pes_payload.data(), pes_payload.size(), pts_90k, false);
-        }
-        else
-        {
+        } else {
             std::cerr << "[VIDEO] No valid frame data found in non-IDR frame" << std::endl;
         }
     }
 }
 
-void PsMuxer::writeAudioFrame(const uint8_t* pcm_data, const uint64_t pts_90k, const size_t len)
-{
+void PsMuxer::writeAudioFrame(const uint8_t* pcm_data, const uint64_t pts_90k, const size_t len) {
     std::lock_guard<std::mutex> lock(_muxer_mutex);
 
-    if (!_is_idr_sent)
-    {
+    if (!_is_idr_sent) {
         std::cerr << "[AUDIO] Waiting for first video IDR" << std::endl;
         return;
     }
@@ -289,25 +246,25 @@ void PsMuxer::writeAudioFrame(const uint8_t* pcm_data, const uint64_t pts_90k, c
     std::vector<int16_t> pcm_buffer(samples);
 
     // 将8位PCM数据转换为16位PCM数据
-    for (int i = 0; i < samples; ++i)
-    {
+    for (int i = 0; i < samples; ++i) {
         pcm_buffer[i] = static_cast<int16_t>((pcm_data[i] - 128) << 8);
     }
 
     // 输出缓冲区大小应与输入样本数匹配
-    std::vector<uint8_t> mulaw_buffer(samples * sizeof(int16_t));
-    PcmEncoder::encode_to_mulaw(pcm_buffer.data(), mulaw_buffer.data(), samples);
+    std::vector<uint8_t> g711_buffer(samples * sizeof(int16_t));
+    AudioProcessor::pcm_to_ulaw(pcm_buffer.data(), g711_buffer.data(), samples);
+    // AudioProcessor::pcm_to_alaw(pcm_buffer.data(), g711_buffer.data(), samples);
 
     // 封装 PES 包
-    buildPesPacket(AUDIO_STREAM_ID, mulaw_buffer.data(), mulaw_buffer.size(), pts_90k, false);
+    buildPesPacket(AUDIO_STREAM_ID, g711_buffer.data(), g711_buffer.size(), pts_90k, false);
 }
 
-void PsMuxer::release()
-{
+void PsMuxer::release() {
     std::lock_guard<std::mutex> lock(_muxer_mutex);
 
     _sps_cache.clear();
     _pps_cache.clear();
+    _is_waiting_for_idr = true;
     _is_idr_sent = false;
 
     std::cout << "PsMuxer released" << std::endl;

@@ -1727,8 +1727,8 @@ void SipRegister::start_receive_audio(const eXosip_event_t* event) {
 
     std::cout << "等待平台发送音频流..." << std::endl;
     _audio_receiver_ptr->start([this, payload_type](const uint8_t* buffer, const size_t len) -> void {
-        const int safe_len = (len > INT_MAX) ? INT_MAX : static_cast<int>(len);
-        const QByteArray g711(reinterpret_cast<const char*>(buffer), safe_len);
+        const auto g711_buffer = reinterpret_cast<const int8_t*>(buffer);
+        const std::vector<int8_t> g711(g711_buffer, g711_buffer + len);
         _g711_callback(g711, len);
         /**
         * G.711 编码:  int16_t(2字节) → uint8_t(1字节)  // 2:1压缩

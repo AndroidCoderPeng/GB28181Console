@@ -14,54 +14,15 @@
  * @param data
  * @param len 帧长度
  */
-void HeaderBuilder::insertStartCode(std::vector<uint8_t>& dst, const uint8_t* data, const size_t len)
-{
-    if (data == nullptr)
-    {
-        std::cerr << "Error: data pointer is null in insertStartCode" << std::endl;
-        return;
-    }
-
-    if (len == 0)
-    {
-        std::cerr << "Warning: len is 0 in insertStartCode" << std::endl;
-        return;
-    }
-
+void HeaderBuilder::insertStartCode(std::vector<uint8_t>& dst, const uint8_t* data, const size_t len) {
     static constexpr uint8_t start_code[4] = {0x00, 0x00, 0x00, 0x01};
     dst.insert(dst.end(), start_code, start_code + 4);
     dst.insert(dst.end(), data, data + len);
-
-    // 打印插入后 dst 的前几字节
-    // std::cout << " 添加起始码后dst前24字节: ";
-    // for (size_t i = 0; i < std::min(dst.size(), static_cast<size_t>(24)); ++i) {
-    //     printf("%02X ", dst[i]);
-    // }
-    // std::cout << std::endl;
 }
 
-/**
- * 两个概念：
- * PES 和 NALU
- *
- * - NALU：网络应用层单元，即视频帧，是H.264数据的基本单元
- * - PES 包：包含负载数据，以及PTS/DTS等信息，是PS流中的基本单元。视频帧较长需要分割为NALU，音频帧（160字节不用分割），再封装成PES包
- * - 封装 PES 包，其实就是把 整帧的 NALU 或者 G.711μ 数据转为 PES 包，通俗来说就是将音视频同一化，方便后续封装为PS流
- *
- * PES包 = [起始码] + [媒体ID] + [PES包长度] + [媒体信息(可选字段)] + [负载数据]
- * */
-std::vector<uint8_t> HeaderBuilder::buildPesHeader(const uint8_t stream_id, const size_t len, const uint64_t pts_90k,
-                                                   const bool is_key_frame)
-{
-    // PES 长度计算：PES头可选字段 + 负载数据长度
-    const uint32_t payload_len = 8 + len;
-
-    // 判断是否超过 uint16_t 最大值
-    const bool use_undefined_length = (payload_len > 0xFFFF);
-    const uint16_t pes_len_field = use_undefined_length ? 0 : static_cast<uint16_t>(payload_len);
-
-    // 标准 PES 头大小固定为 14 字节
-    std::vector<uint8_t> pes_header(14);
+std::vector<uint8_t> HeaderBuilder::buildPesHeader(const uint8_t stream_id, const size_t len, const uint64_t pts_90k) {
+    // 前 6 字节（起始码 + stream_id + length）总是存在
+    std::vector<uint8_t> pes_header(14); // 一般14字节即可满足需求，如果有私有字段，这个长度也需要变
 
     // PES start code【3字节】
     pes_header[0] = 0x00;
@@ -71,59 +32,84 @@ std::vector<uint8_t> HeaderBuilder::buildPesHeader(const uint8_t stream_id, cons
     // 流ID【1字节】
     pes_header[3] = stream_id;
 
-    // PES 长度【2字节】
-    pes_header[4] = (pes_len_field >> 8) & 0xFF;
-    pes_header[5] = pes_len_field & 0xFF;
+    // PES 长度【2字节】，PES头之后的数据长度（即负载长度 + 可选头长度）
+    uint16_t pes_len = pes_header.size() - 6 + len;
+    pes_header[4] = (pes_len >> 8) & 0xFF;
+    pes_header[5] = pes_len & 0xFF;
 
-    // ================================ PES 可选字段 ================================//
+    // ================================ 下面的全是可选字段 ================================//
+    /**
+     * PES 包第一标志【1字节】，需要按二进制位拆解各位的含义
+     *
+     * 假设第7字节是 0x84（十六进制），转为二进制是：1000 0100
+     * - 位7~6: 10 → 符合 MPEG-2 PES（固定值，用于标识这是一个 MPEG-2 PES 包）
+     * - 位5~4: 00 → 未加扰（加密不等于加扰，但可以理解为简单加密，举个例子来说就是就是表示是否收费与免费的区别）
+     * - 位3: 0 → 普通优先级（虽不是固定值，但常为0）
+     * - 位2: 0 → 无数据对齐（关键帧需要对齐，简单来说关键帧位2=1，其他帧位2=0）
+     * - 位1: 1 → 有版权（0或者1随意，自行决定）
+     * - 位0: 0 → 是拷贝（首次封装，源头生成位0=1，否则位0=0）
+     * */
+    // 1000 0111 -> 0x87: MPEG-2 + 未加扰 + 数据对齐 + 有版权 + 原始流
+    pes_header[6] = 0x87;
 
-    // PES 包第一标志【1字节】
-    if (is_key_frame)
-    {
-        // 1000 0111 -> 87
-        pes_header[6] = 0x87;
-    }
-    else
-    {
-        // 1000 0011 -> 83
-        pes_header[6] = 0x83;
-    }
+    /**
+     * PES 包第二标志【1字节】，需要按二进制位拆解各位的含义
+     *
+     * 假设第7字节是 0x80（十六进制），转为二进制是：1000 0000
+     * - 位7~6: 10 → 只包含 PTS（绝大多数手机摄像头、实时采集场景都禁用 B 帧，只需 PTS，另外音频永远只需 PTS）
+     * - 位5: 0 → 无 ESCR（已经基本废弃不用）
+     * - 位4: 0 → 无 ES_rate（已经基本废弃不用）
+     * - 位3: 0 → 无 trick mode（已经基本废弃不用）
+     * - 位2: 0 → 无 additional copy info（已经基本废弃不用）
+     * - 位1: 0 → 有 PES_CRC（基本不用）
+     * - 位0: 0 → 扩展字段（私有扩展，基本不用）
+     * */
+    // 1000 0000 -> 0x80
+    pes_header[7] = 0x80;
 
-    // PES 包第二标志【1字节】
-    pes_header[7] = 0x80; // 只包含 PTS
+    // PES头的附加信息，从第10个字节开始（不包括前9个字节和自己），往后数多少个字节
+    pes_header[8] = 0x05;
 
-    // PES 头附加信息长度【1字节】
-    pes_header[8] = 0x05; // PTS 占用 5 字节
+    // PTS【5字节】，所以附加信息长度就是5。MPEG-2 PTS 只有 33 位，必须 mask 掉高位，避免溢出
+    /**
+     * 00000000 00000000 00000000 00000000 00000000
+     * [0010][32..30][1][29..15][1][14..0][1]
+     */
+    const auto pts = pts_90k & 0x1FFFFFFFFULL;
+    pes_header[9] = 0x20 | ((pts >> 30) & 0x07) << 1; // 获取第32-29位, 注意要左移一位加上marker_bit逻辑
+    pes_header[9] |= 0x20;                            // 加上marker_bit
 
-    // PTS【5字节】
-    const uint64_t pts = pts_90k & 0x1FFFFFFFFULL;
-    pes_header[9] = 0x20 | ((pts >> 29) & 0x0E) | 0x01; // byte[9]: [0010] + [bits 32-30] + [marker=1]
-    pes_header[10] = (pts >> 22) & 0xFF;                // byte[10]: bits 29-22
-    pes_header[11] = ((pts >> 14) & 0xFE) | 0x01;       // byte[11]: [bits 21-15] + [marker=1]
-    pes_header[12] = (pts >> 7) & 0xFF;                 // byte[12]: bits 14-7
-    pes_header[13] = ((pts << 1) & 0xFE) | 0x01;        // byte[13]: [bits 6-0] + [marker=1]
+    pes_header[10] = (pts >> 22) & 0xFF; // 获取第28-21位
+    pes_header[10] |= 0x01 << 7;         // 加上marker_bit
+
+    pes_header[11] = (pts >> 14) & 0xFE; // 获取第20-14位, 注意第一位之后需要加marker_bit
+    pes_header[11] |= 0x01;              // 加上marker_bit
+
+    pes_header[12] = (pts >> 7) & 0xFF; // 获取第13-7位
+    pes_header[12] |= 0x01 << 7;        // 加上marker_bit
+
+    pes_header[13] = (pts & 0xFE) | 0x01; // 获取第6-0位, 并在最后加上marker_bit
     return pes_header;
 }
 
-std::vector<uint8_t> HeaderBuilder::buildSystemHeader(const uint8_t video_stream_id, const uint8_t audio_stream_id)
-{
+std::vector<uint8_t> HeaderBuilder::buildSystemHeader(const uint8_t video_stream_id,
+                                                      const uint8_t audio_stream_id) {
     static const uint8_t system_header[] = {
         0x00, 0x00, 0x01,       // 起始码，固定值
         0xBB,                   // PS流ID，固定值
-        0x00, 0x0C,             // 00 0C：‘系统头’后续长度=12字节
+        0x00, 0x10,             // 00 10：'系统头'后续长度=16字节
         0x80,                   // 1000 0000，系统头标志，第1位marker_bit=1，按规范固定
         0x04, 0xFF, 0xFF,       // 最大码率（0x04FFFF），主流GB推流模板，单位50字节/秒
         0xE0, 0x07, 0xC0, 0x0F, // 预留字段
-        video_stream_id,        // 视频stream_id（首路视频）
+        video_stream_id,        // 视频stream_id（0xE0-0xEF）
         0x20, 0x00,             // 视频buffer bound（0x2000，约1MB）
-        audio_stream_id,        // 音频stream_id（首路音频）
+        audio_stream_id,        // 音频stream_id（0xC0-0xDF）
         0x01, 0x00              // 音频buffer bound（0x0100，约32KB）
     };
     return {system_header, system_header + sizeof(system_header)};
 }
 
-std::vector<uint8_t> HeaderBuilder::buildPsMap()
-{
+std::vector<uint8_t> HeaderBuilder::buildPsMap() {
     std::vector<uint8_t> psm;
 
     // 起始码和 PS Map ID
@@ -133,22 +119,25 @@ std::vector<uint8_t> HeaderBuilder::buildPsMap()
     psm.push_back(0xBC);
 
     // PSM 长度占位符 (稍后填充)
-    size_t length_pos = psm.size();
+    const size_t length_pos = psm.size();
     psm.push_back(0x00);
     psm.push_back(0x00);
 
     // 当前有效标志、版本号、保留位
-    psm.push_back(0xE0); // 当前有效(1) + 版本0(00000) + 保留(11)
+    psm.push_back(0xE1); // 当前有效(1) + 版本1(00001) + 保留(11)
     psm.push_back(0xFF); // 保留(1111111) + 标记位(1)
 
     // Program Stream Info Length
     psm.push_back(0x00);
     psm.push_back(0x00);
 
-    // Elementary Stream Map Length (每个流占4字节)
-    constexpr uint16_t es_map_length = 8; // 2个流 × 4字节
-    psm.push_back((es_map_length >> 8) & 0xFF);
-    psm.push_back(es_map_length & 0xFF);
+    // 记录 ES Map 长度字段位置
+    const size_t es_map_length_pos = psm.size();
+    psm.push_back(0x00);
+    psm.push_back(0x00);
+
+    // 记录 ES Map 起始位置（用于计算实际长度）
+    const size_t es_map_start = psm.size();
 
     // 视频流信息
     psm.push_back(STREAM_TYPE_H264);
@@ -161,6 +150,11 @@ std::vector<uint8_t> HeaderBuilder::buildPsMap()
     psm.push_back(AUDIO_STREAM_ID);
     psm.push_back(0x00); // ES Info Length (高字节)
     psm.push_back(0x00); // ES Info Length (低字节)
+
+    // 回填 Elementary Stream Map Length
+    const uint16_t es_map_length = psm.size() - es_map_start;
+    psm[es_map_length_pos] = (es_map_length >> 8) & 0xFF;
+    psm[es_map_length_pos + 1] = es_map_length & 0xFF;
 
     // CRC32 占位符
     const size_t crc_pos = psm.size();
@@ -184,35 +178,43 @@ std::vector<uint8_t> HeaderBuilder::buildPsMap()
     return psm;
 }
 
-std::vector<uint8_t> HeaderBuilder::buildPsPackHeader(const uint64_t pts_90k)
-{
+std::vector<uint8_t> HeaderBuilder::buildPsPackHeader(uint64_t pts_90k) {
     std::vector<uint8_t> ps_header(14);
 
-    // 起始码【3字节】
+    // 起始码【4字节】
     ps_header[0] = 0x00;
     ps_header[1] = 0x00;
     ps_header[2] = 0x01;
-
-    // PS包头【1字节】
     ps_header[3] = 0xBA;
 
     // SCR【6字节 = 48位】——33位数据，其他位是标志位，90kHz时钟
     const auto scr = pts_90k & 0x1FFFFFFFFULL; // 强制保留低 33 位
     constexpr auto scr_ext = 0;                // SCR extension，通常为 0
-    ps_header[4] = 0x40                        // '0100 0000' 起始标记
-        | ((scr >> 27) & 0x38)                 // scr[32:30] 移到 bit[5: 3]
-        | 0x04                                 // marker_bit = 1 在 bit[2]
-        | ((scr >> 28) & 0x03);                // scr[29:28] 移到 bit[1:0]
+    // byte[4]:  '0100' + scr[32:30] + '1' + scr[29:28]
+    ps_header[4] = 0x40             // '0100 0000' 起始标记
+            | ((scr >> 27) & 0x38)  // scr[32:30] 移到 bit[5: 3]
+            | 0x04                  // marker_bit = 1 在 bit[2]
+            | ((scr >> 28) & 0x03); // scr[29:28] 移到 bit[1:0]
+
+    // byte[5]: scr[27:20]
     ps_header[5] = (scr >> 20) & 0xFF;
+
+    // byte[6]: scr[19:15] + '1' + scr[14:13]
     ps_header[6] = ((scr >> 12) & 0xF8) // scr[19:15] 移到 bit[7:3]
-        | 0x04                          // marker_bit = 1 在 bit[2]
-        | ((scr >> 13) & 0x03);         // scr[14:13] 移到 bit[1:0]
+            | 0x04                      // marker_bit = 1 在 bit[2]
+            | ((scr >> 13) & 0x03);     // scr[14:13] 移到 bit[1:0]
+
+    // byte[7]:  scr[12:5]
     ps_header[7] = (scr >> 5) & 0xFF;
-    ps_header[8] = ((scr << 3) & 0xF8)     // scr[4:0] 移到 bit[7:3]
-        | 0x04                             // marker_bit = 1 在 bit[2]
-        | ((scr_ext >> 7) & 0x03);         // scr_ext[8:7] 移到 bit[1:0]
+
+    // byte[8]: scr[4:0] + '1' + scr_ext[8:7]
+    ps_header[8] = ((scr << 3) & 0xF8) // scr[4:0] 移到 bit[7:3]
+            | 0x04                     // marker_bit = 1 在 bit[2]
+            | ((scr_ext >> 7) & 0x03); // scr_ext[8:7] 移到 bit[1:0]
+
+    // byte[9]: scr_ext[6:0] + '1'
     ps_header[9] = ((scr_ext << 1) & 0xFE) // scr_ext[6:0] 移到 bit[7:1]
-        | 0x01;                            // marker_bit = 1 在 bit[0]
+            | 0x01;                        // marker_bit = 1 在 bit[0]
 
     // 码流率，直接用最大值模板，提高兼容性
     ps_header[10] = 0xFF;

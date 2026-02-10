@@ -14,13 +14,11 @@
  *  - System Header（系统头）：描述流的同步要求，如缓冲区大小、多流特性（可选部分）。
  *  - PES（Packetized Elementary Stream）：最小的视频或音频负载单位。
  * */
-class PsMuxer
-{
+class PsMuxer {
 public:
     explicit PsMuxer() = default;
 
-    static PsMuxer* get()
-    {
+    static PsMuxer* get() {
         static PsMuxer instance;
         return &instance;
     }
