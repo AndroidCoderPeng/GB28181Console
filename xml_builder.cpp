@@ -9,16 +9,30 @@
 
 #include "pugixml.hpp"
 
-std::string XmlBuilder::buildDeviceInfo(const std::string& sn, const std::string& device_code,
-                                        const std::string& device_name,
-                                        const std::string& serial_number)
-{
-    std::cout << "Build DeviceInfo: " << std::endl;
-    pugi::xml_document xml;
-    // 添加 XML 声明：<?xml version="1.0" encoding="GB2312"?>
-    pugi::xml_node declaration = xml.prepend_child(pugi::node_declaration);
+/**
+ * 添加通用 XML 声明: <?xml version="1.0" encoding="GB2312"?>
+ * @param doc pugi::xml_document
+ */
+static void add_xml_declaration(pugi::xml_document& doc) {
+    pugi::xml_node declaration = doc.prepend_child(pugi::node_declaration);
     declaration.append_attribute("version") = "1.0";
     declaration.append_attribute("encoding") = "GB2312";
+}
+
+std::string XmlBuilder::buildDeviceInfo(const std::string& sn, const std::string& device_code,
+                                        const std::string& device_name,
+                                        const std::string& serial_number) {
+    std::cout << "┌──────────────────────────────────────┐" << std::endl;
+    std::cout << "│  构建设备信息 XML" << std::endl;
+    std::cout << "│  CmdType: DeviceInfo" << std::endl;
+    std::cout << "│  SN: " << sn.c_str() << std::endl;
+    std::cout << "│  DeviceID: " << device_code.c_str() << std::endl;
+    std::cout << "└──────────────────────────────────────┘" << std::endl;
+
+    pugi::xml_document xml;
+
+    // 添加 XML 声明：<?xml version="1.0" encoding="GB2312"?>
+    add_xml_declaration(xml);
 
     // 根节点 <Response>
     pugi::xml_node root = xml.append_child("Response");
@@ -36,20 +50,27 @@ std::string XmlBuilder::buildDeviceInfo(const std::string& sn, const std::string
     // 保存到字符串，使用 2 空格缩进，保持可读性
     std::ostringstream oss;
     xml.save(oss, "  ", pugi::format_default, pugi::encoding_utf8);
+    std::string result = oss.str();
 
-    std::cout << oss.str() << std::endl;
-    return oss.str();
+    std::cout << "┌─────────── DeviceInfo XML ───────────┐" << std::endl;
+    std::cout << result.c_str() << std::endl;
+    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    return result;
 }
 
 std::string XmlBuilder::buildCatalog(const std::string& sn, const std::string& device_code,
-                                     const std::string& server_domain, double longitude, double latitude)
-{
-    std::cout << "Build Catalog: " << std::endl;
+                                     const std::string& server_domain, double longitude, double latitude) {
+    std::cout << "┌──────────────────────────────────────┐" << std::endl;
+    std::cout << "│  构建设备目录 XML" << std::endl;
+    std::cout << "│  CmdType: Catalog" << std::endl;
+    std::cout << "│  SN: " << sn.c_str() << std::endl;
+    std::cout << "│  DeviceID: " << device_code.c_str() << std::endl;
+    std::cout << "└──────────────────────────────────────┘" << std::endl;
+
     pugi::xml_document xml;
+
     // 添加 XML 声明
-    pugi::xml_node declaration = xml.prepend_child(pugi::node_declaration);
-    declaration.append_attribute("version") = "1.0";
-    declaration.append_attribute("encoding") = "GB2312";
+    add_xml_declaration(xml);
 
     // 根节点 <Response>
     pugi::xml_node root = xml.append_child("Response");
@@ -95,19 +116,26 @@ std::string XmlBuilder::buildCatalog(const std::string& sn, const std::string& d
     // 保存为格式化字符串（带缩进）
     std::ostringstream oss;
     xml.save(oss, "  ", pugi::format_default, pugi::encoding_utf8);
+    std::string result = oss.str();
 
-    std::cout << oss.str() << std::endl;
-    return oss.str();
+    std::cout << "┌──────────── Catalog XML ─────────────┐" << std::endl;
+    std::cout << result.c_str() << std::endl;
+    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    return result;
 }
 
-std::string XmlBuilder::buildHeartbeat(const std::string& sn, const std::string& device_code)
-{
-    std::cout << "Build Keepalive: " << std::endl;
+std::string XmlBuilder::buildHeartbeat(const std::string& sn, const std::string& device_code) {
+    std::cout << "┌──────────────────────────────────────┐" << std::endl;
+    std::cout << "│  构建心跳 XML" << std::endl;
+    std::cout << "│  CmdType: Keepalive" << std::endl;
+    std::cout << "│  SN: " << sn.c_str() << std::endl;
+    std::cout << "│  DeviceID: " << device_code.c_str() << std::endl;
+    std::cout << "└──────────────────────────────────────┘" << std::endl;
+
     pugi::xml_document xml;
+
     // 添加 XML 声明
-    pugi::xml_node declaration = xml.prepend_child(pugi::node_declaration);
-    declaration.append_attribute("version") = "1.0";
-    declaration.append_attribute("encoding") = "GB2312";
+    add_xml_declaration(xml);
 
     // 根节点 <Notify>
     pugi::xml_node root = xml.append_child("Notify");
@@ -120,7 +148,10 @@ std::string XmlBuilder::buildHeartbeat(const std::string& sn, const std::string&
     // 保存到字符串，使用 2 空格缩进，保持可读性
     std::ostringstream oss;
     xml.save(oss, "  ", pugi::format_default, pugi::encoding_utf8);
+    std::string result = oss.str();
 
-    std::cout << oss.str() << std::endl;
-    return oss.str();
+    std::cout << "┌─────────── Keepalive XML ────────────┐" << std::endl;
+    std::cout << result.c_str() << std::endl;
+    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    return result;
 }

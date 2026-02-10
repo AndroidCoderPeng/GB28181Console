@@ -5,6 +5,9 @@
 #ifndef GB28181_BASE_CONFIG_HPP
 #define GB28181_BASE_CONFIG_HPP
 
+#define REGISTER_EXPIRED_TIME 7200 // 注册有效期
+#define HEARTBEAT_INTERVAL 30 // 心跳间隔
+
 #define VIDEO_WIDTH 640  // 视频画面宽度
 #define VIDEO_HEIGHT 360 // 视频画面高度
 #define VIDEO_FPS 25 // 视频帧率
