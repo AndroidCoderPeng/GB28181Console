@@ -66,14 +66,12 @@ void FrameEncoder::pushFrame(const cv::Mat& frame) {
     if (frame.empty() || !frame.data)
         return;
 
-    std::lock_guard<std::mutex> lock(_mutex);
+    std::unique_lock<std::mutex> lock(_mutex);
 
     // 环形缓冲区写入逻辑
     if (_ringBuffer.frames.size() < _ringBuffer.capacity) {
-        // 初始化阶段：直接添加
         _ringBuffer.frames.push_back(frame.clone());
     } else {
-        // 正常运行：覆盖最旧帧
         _ringBuffer.frames[_ringBuffer.writeIndex] = frame.clone();
     }
 
@@ -85,7 +83,7 @@ void FrameEncoder::pushFrame(const cv::Mat& frame) {
     // 触发处理（如果未在处理中）
     if (!_isProcessing && _ringBuffer.count > 0) {
         _isProcessing = true;
-        // lock.unlock(); TODO 解锁？
+        lock.unlock();
         handleFrame();
     }
 }
