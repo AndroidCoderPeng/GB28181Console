@@ -19,8 +19,8 @@
 class SipRegister {
 public:
     using SipEventCallback = std::function<void(int, const std::string&)>;
-    using PcmDataCallback = std::function<void(std::vector<int16_t>, size_t)>;
-    using G711DataCallback = std::function<void(std::vector<int8_t>, size_t)>;
+    using PcmDataCallback = std::function<void(std::vector<int16_t>&, size_t)>;
+    using G711DataCallback = std::function<void(std::vector<int8_t>&, size_t)>;
 
     // 构造函数
     explicit SipRegister(const std::string& local_host, const std::string& server_host, int server_port,

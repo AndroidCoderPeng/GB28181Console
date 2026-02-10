@@ -195,20 +195,48 @@ private:
     }
 };
 
-int main() {
-    VideoCaptureManager manager;
-    if (!manager.initializeCamera()) {
-        std::cerr << "Failed to initialize camera" << std::endl;
-        return -1;
+static void handle_sip_message(const int code, const std::string& message) {
+    std::cout << "Response code: " << code << ", " << message << std::endl;
+    switch (code) {
+        case 200:
+        {
+            std::cout << "SIP registration completed" << std::endl;
+            break;
+        }
+        case 201:
+        {
+            std::cout << "SIP unregistration completed" << std::endl;
+            break;
+        }
+        case 1000:
+        {
+            std::cout << "Video stream started" << std::endl;
+            break;
+        }
+        case 1001:
+        {
+            std::cout << "Video stream stopped" << std::endl;
+            break;
+        }
+        default:
+            break;
     }
+}
 
-    // 启动视频捕获
-    manager.startCapture();
+static void play_audio_in_pcm(const std::vector<int16_t> pcm, const size_t samples) {
+    std::cout << "Playing audio in PCM" << std::endl;
+}
+
+static void play_audio_in_g711(const std::vector<int8_t> g711, const size_t samples) {
+    std::cout << "Playing audio in G711" << std::endl;
+}
+
+int main() {
+    // 摄像头采集
     std::cout << "Camera capturing started" << std::endl;
 
     // Sip注册
-    const auto sip_register = std::make_unique<SipRegister>(
-                                                            "192.168.3.131",
+    const auto sip_register = std::make_unique<SipRegister>("192.168.3.131",
                                                             "111.198.10.15",
                                                             22117,
                                                             "11010800002000000002",
@@ -219,52 +247,15 @@ int main() {
                                                             "1234qwer",
                                                             116.3975,
                                                             39.9085);
-
-    sip_register->setSipEventCallback([&manager](const int code, const std::string& message) {
-        switch (code) {
-            case 200:
-            {
-                manager.setRegistered(true);
-                auto encoder = std::make_unique<FrameEncoder>();
-                if (!encoder->prepare()) {
-                    std::cerr << "Failed to prepare video encoder" << std::endl;
-                } else {
-                    manager.setFrameEncoder(std::move(encoder));
-                    std::cout << "Video encoder prepared successfully" << std::endl;
-                }
-                break;
-            }
-            case 201:
-            {
-                manager.setRegistered(false);
-                std::cout << "SIP unregistration completed" << std::endl;
-                break;
-            }
-            case 1000:
-            {
-                if (const auto encoder = manager.getFrameEncoder()) {
-                    encoder->startStream();
-                    std::cout << "Video stream started" << std::endl;
-                }
-                break;
-            }
-            case 1001:
-            {
-                if (const auto encoder = manager.getFrameEncoder()) {
-                    encoder->stopStream();
-                    std::cout << "Video stream stopped" << std::endl;
-                }
-                break;
-            }
-            default:
-                break;
-        }
-        std::cout << "Response code: " << code << ", message: " << message << std::endl;
-    });
+    sip_register->setCallback([](const int code, const std::string& message) {
+                                  handle_sip_message(code, message);
+                              }, [](const std::vector<int16_t>& pcm, const size_t samples) {
+                                  play_audio_in_pcm(pcm, samples);
+                              }, [](const std::vector<int8_t>& g711, const size_t samples) {
+                                  play_audio_in_g711(g711, samples);
+                              });
 
     // 保持主线程运行
     std::cout << "System running... Press Ctrl+C to exit." << std::endl;
-    std::this_thread::sleep_for(std::chrono::hours(24)); // 24小时后自动退出
-    manager.stopCapture();
     return 0;
 }
