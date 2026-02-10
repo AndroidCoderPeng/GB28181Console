@@ -7,9 +7,12 @@
 #include <thread>
 #include <opencv2/opencv.hpp>
 
+#include "frame_capture.hpp"
 #include "base_config.hpp"
 #include "frame_encoder.hpp"
 #include "sip_register.hpp"
+
+static FrameCapture* frame_capture_ptr = nullptr;
 
 class VideoCaptureManager {
 public:
@@ -195,6 +198,14 @@ private:
     }
 };
 
+static void handle_camera_error(const std::string& error) {
+    std::cerr << "Camera error: " << error << std::endl;
+}
+
+static void handle_camera_frame(const cv::Mat& frame) {
+    std::cout << "Received camera frame: " << frame.cols << "x" << frame.rows << std::endl;
+}
+
 static void handle_sip_message(const int code, const std::string& message) {
     std::cout << "Response code: " << code << ", " << message << std::endl;
     switch (code) {
@@ -233,6 +244,13 @@ static void play_audio_in_g711(const std::vector<int8_t> g711, const size_t samp
 
 int main() {
     // 摄像头采集
+    frame_capture_ptr = new FrameCapture(0,
+                                         [](const std::string& error) {
+                                             handle_camera_error(error);
+                                         }, [](const cv::Mat& frame) {
+                                             handle_camera_frame(frame);
+                                         });
+    frame_capture_ptr->start();
     std::cout << "Camera capturing started" << std::endl;
 
     // Sip注册

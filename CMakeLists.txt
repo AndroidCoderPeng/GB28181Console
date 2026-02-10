@@ -50,7 +50,7 @@ add_executable(GB28181Console
         main.cpp
 
         # 核心业务类
-#        frame_capture.cpp
+        frame_capture.cpp
         frame_encoder.cpp
         pugixml.cpp
         xml_builder.cpp

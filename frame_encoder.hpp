@@ -40,12 +40,12 @@ private:
     std::mutex _mutex;
     bool _isProcessing = false;
 
-    AVCodecContext* _codecContextPtr = nullptr;
-    AVFrame* _framePtr = nullptr;
-    AVPacket* _packetPtr = nullptr;
-    SwsContext* _swsContextPtr = nullptr;
+    AVCodecContext* _codec_ctx_ptr = nullptr;
+    AVFrame* _frame_ptr = nullptr;
+    AVPacket* _packet_ptr = nullptr;
+    SwsContext* _sws_ctx_ptr = nullptr;
 
-    H264DataCallback _h264DataCallback;
+    H264DataCallback _h264_callback;
 
     bool _is_push_stream = false;
 };

@@ -27,38 +27,38 @@ FrameEncoder::FrameEncoder(const size_t bufferSize) {
         return;
     }
 
-    _codecContextPtr = avcodec_alloc_context3(codecPtr);
-    _codecContextPtr->width = VIDEO_WIDTH;
-    _codecContextPtr->height = VIDEO_HEIGHT;
-    _codecContextPtr->time_base = {1, VIDEO_FPS}; // 25fps
-    _codecContextPtr->pix_fmt = AV_PIX_FMT_YUV420P;
-    _codecContextPtr->bit_rate = VIDEO_BIT_RATE; // 2Mbps
-    _codecContextPtr->gop_size = VIDEO_FPS;      // GOP大小
-    _codecContextPtr->max_b_frames = 0;          // 实时流不用B帧
+    _codec_ctx_ptr = avcodec_alloc_context3(codecPtr);
+    _codec_ctx_ptr->width = VIDEO_WIDTH;
+    _codec_ctx_ptr->height = VIDEO_HEIGHT;
+    _codec_ctx_ptr->time_base = {1, VIDEO_FPS}; // 25fps
+    _codec_ctx_ptr->pix_fmt = AV_PIX_FMT_YUV420P;
+    _codec_ctx_ptr->bit_rate = VIDEO_BIT_RATE; // 2Mbps
+    _codec_ctx_ptr->gop_size = VIDEO_FPS;      // GOP大小
+    _codec_ctx_ptr->max_b_frames = 0;          // 实时流不用B帧
 
     // 设置编码参数
-    av_opt_set(_codecContextPtr->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(_codecContextPtr->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(_codec_ctx_ptr->priv_data, "preset", "ultrafast", 0);
+    av_opt_set(_codec_ctx_ptr->priv_data, "tune", "zerolatency", 0);
 
-    if (avcodec_open2(_codecContextPtr, codecPtr, nullptr) < 0) {
+    if (avcodec_open2(_codec_ctx_ptr, codecPtr, nullptr) < 0) {
         std::cerr << "Could not open codec" << std::endl;
         return;
     }
 
     // 分配帧和包
-    _framePtr = av_frame_alloc();
-    _framePtr->format = _codecContextPtr->pix_fmt;
-    _framePtr->width = _codecContextPtr->width;
-    _framePtr->height = _codecContextPtr->height;
-    av_frame_get_buffer(_framePtr, 0);
+    _frame_ptr = av_frame_alloc();
+    _frame_ptr->format = _codec_ctx_ptr->pix_fmt;
+    _frame_ptr->width = _codec_ctx_ptr->width;
+    _frame_ptr->height = _codec_ctx_ptr->height;
+    av_frame_get_buffer(_frame_ptr, 0);
 
     // 分配包
-    _packetPtr = av_packet_alloc();
+    _packet_ptr = av_packet_alloc();
 
     // 初始化SwsContext（用于BGR到YUV420P转换）
-    _swsContextPtr = sws_getContext(
-                                    _codecContextPtr->width, _codecContextPtr->height, AV_PIX_FMT_BGR24,
-                                    _codecContextPtr->width, _codecContextPtr->height, AV_PIX_FMT_YUV420P,
+    _sws_ctx_ptr = sws_getContext(
+                                    _codec_ctx_ptr->width, _codec_ctx_ptr->height, AV_PIX_FMT_BGR24,
+                                    _codec_ctx_ptr->width, _codec_ctx_ptr->height, AV_PIX_FMT_YUV420P,
                                     SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 }
 
@@ -107,7 +107,7 @@ void FrameEncoder::handleFrame() {
     // 编码
     {
         // 确保AVFrame可写
-        if (av_frame_make_writable(_framePtr) < 0) {
+        if (av_frame_make_writable(_frame_ptr) < 0) {
             std::cerr << "Could not make frame writable" << std::endl;
             return;
         }
@@ -116,19 +116,19 @@ void FrameEncoder::handleFrame() {
         const uint8_t* srcSlice[1] = {frame.data};
         const int srcStride[1] = {static_cast<int>(frame.step[0])};
 
-        sws_scale(_swsContextPtr, srcSlice, srcStride, 0, frame.rows, _framePtr->data, _framePtr->linesize);
+        sws_scale(_sws_ctx_ptr, srcSlice, srcStride, 0, frame.rows, _frame_ptr->data, _frame_ptr->linesize);
 
         // 发送帧给编码器
-        if (avcodec_send_frame(_codecContextPtr, _framePtr) < 0) {
+        if (avcodec_send_frame(_codec_ctx_ptr, _frame_ptr) < 0) {
             std::cerr << "Error sending frame to encoder" << std::endl;
             return;
         }
 
         // 接收编码后的包
-        while (avcodec_receive_packet(_codecContextPtr, _packetPtr) >= 0) {
-            const std::vector<uint8_t> h264Buffer(_packetPtr->data, _packetPtr->data + _packetPtr->size);
-            _h264DataCallback(h264Buffer);
-            av_packet_unref(_packetPtr);
+        while (avcodec_receive_packet(_codec_ctx_ptr, _packet_ptr) >= 0) {
+            const std::vector<uint8_t> h264Buffer(_packet_ptr->data, _packet_ptr->data + _packet_ptr->size);
+            _h264_callback(h264Buffer);
+            av_packet_unref(_packet_ptr);
         }
     }
 
@@ -137,16 +137,16 @@ void FrameEncoder::handleFrame() {
 }
 
 FrameEncoder::~FrameEncoder() {
-    if (_swsContextPtr) {
-        sws_freeContext(_swsContextPtr);
+    if (_sws_ctx_ptr) {
+        sws_freeContext(_sws_ctx_ptr);
     }
-    if (_codecContextPtr) {
-        avcodec_free_context(&_codecContextPtr);
+    if (_codec_ctx_ptr) {
+        avcodec_free_context(&_codec_ctx_ptr);
     }
-    if (_framePtr) {
-        av_frame_free(&_framePtr);
+    if (_frame_ptr) {
+        av_frame_free(&_frame_ptr);
     }
-    if (_packetPtr) {
-        av_packet_free(&_packetPtr);
+    if (_packet_ptr) {
+        av_packet_free(&_packet_ptr);
     }
 }
