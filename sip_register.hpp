@@ -28,16 +28,12 @@ public:
                          const std::string& device_code, const std::string& serial_number,
                          const std::string& device_name, const std::string& password,
                          double longitude, double latitude);
-
-    // 设置回调函数
-    void setCallback(const SipEventCallback& event_callback,
-                     const PcmDataCallback& pcm_callback,
-                     const G711DataCallback& g711_callback);
-
     /**
      * 注册
      */
-    bool doRegister();
+    bool doRegister(const SipEventCallback& event_callback,
+                    const PcmDataCallback& pcm_callback,
+                    const G711DataCallback& g711_callback);
 
     /**
      * 注销（发送 expires=0 的 REGISTER）

@@ -141,14 +141,11 @@ SipRegister::SipRegister(const std::string& local_host, const std::string& serve
     std::cout << "SipRegister initialized successfully" << std::endl;
 }
 
-void SipRegister::setCallback(const SipEventCallback& event_callback, const PcmDataCallback& pcm_callback,
-                              const G711DataCallback& g711_callback) {
+bool SipRegister::doRegister(const SipEventCallback& event_callback, const PcmDataCallback& pcm_callback,
+                             const G711DataCallback& g711_callback) {
     _event_callback = event_callback;
     _pcm_callback = pcm_callback;
     _g711_callback = g711_callback;
-}
-
-bool SipRegister::doRegister() {
     return real_sip_registration(REGISTER_EXPIRED_TIME);
 }
 
