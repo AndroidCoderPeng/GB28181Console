@@ -6,6 +6,7 @@
 #define GB28181_RTP_SENDER_HPP
 
 #include <netinet/in.h>
+#include <mutex>
 
 #include "sdp_parser.hpp"
 
@@ -39,7 +40,12 @@ public:
     ~RtpSender();
 
 private:
+    static constexpr size_t MAX_RTP_PAYLOAD = 1400;                // 单个 PS 包的最大尺寸
+    static constexpr size_t MAX_RTP_PACKET = 12 + MAX_RTP_PAYLOAD; // 完整 RTP 包最大长度（1412）
+
     int _rtp_socket = -1; // 用于发送数据的socket
+    std::mutex _buffer_mutex{};
+    uint8_t _rtp_buffer[MAX_RTP_PACKET];
     uint32_t _ssrc = 0x12345678;
     uint16_t _seq = 0;
     uint8_t _payload_type = 96; // PS流的 payload type
@@ -50,15 +56,6 @@ private:
      * @param sdp SDP
      */
     void init_ssrc_seq(const SdpStruct& sdp);
-
-    /**
-     * 填充 RTP 头
-     *
-     * @param packet RTP 头
-     * @param marker_bit 标记位
-     * @param timestamp 时间戳
-     */
-    void fill_rtp_header(uint8_t* packet, bool marker_bit, uint32_t timestamp) const;
 
     /**
      * 发送 RTP 包

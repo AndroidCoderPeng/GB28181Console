@@ -2,22 +2,14 @@
 // Created by peng on 2025/12/21.
 //
 
-#ifndef GB28181_HEADER_BUILDER_HPP
-#define GB28181_HEADER_BUILDER_HPP
+#ifndef GB28181CONSOLE_HEADER_BUILDER_HPP
+#define GB28181CONSOLE_HEADER_BUILDER_HPP
 
 #include <cstdint>
 #include <vector>
 
 class HeaderBuilder {
 public:
-    /**
-     * 给 SPS/PPS/IDR/P 帧添加起始码
-     * @param dst
-     * @param data
-     * @param len
-     */
-    static void insertStartCode(std::vector<uint8_t>& dst, const uint8_t* data, size_t len);
-
     static std::vector<uint8_t> buildPesHeader(uint8_t stream_id, size_t len, uint64_t pts_90k);
 
     /**
@@ -33,4 +25,4 @@ public:
     static std::vector<uint8_t> buildPsPackHeader(uint64_t pts_90k);
 };
 
-#endif //GB28181_HEADER_BUILDER_HPP
+#endif //GB28181CONSOLE_HEADER_BUILDER_HPP

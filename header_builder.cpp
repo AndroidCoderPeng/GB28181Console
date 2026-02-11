@@ -8,18 +8,6 @@
 
 #include <iostream>
 
-/**
- * 给 SPS/PPS/IDR/P 添加起始码
- * @param dst
- * @param data
- * @param len 帧长度
- */
-void HeaderBuilder::insertStartCode(std::vector<uint8_t>& dst, const uint8_t* data, const size_t len) {
-    static constexpr uint8_t start_code[4] = {0x00, 0x00, 0x00, 0x01};
-    dst.insert(dst.end(), start_code, start_code + 4);
-    dst.insert(dst.end(), data, data + len);
-}
-
 std::vector<uint8_t> HeaderBuilder::buildPesHeader(const uint8_t stream_id, const size_t len, const uint64_t pts_90k) {
     // 前 6 字节（起始码 + stream_id + length）总是存在
     std::vector<uint8_t> pes_header(14); // 一般14字节即可满足需求，如果有私有字段，这个长度也需要变
@@ -33,7 +21,7 @@ std::vector<uint8_t> HeaderBuilder::buildPesHeader(const uint8_t stream_id, cons
     pes_header[3] = stream_id;
 
     // PES 长度【2字节】，PES头之后的数据长度（即负载长度 + 可选头长度）
-    uint16_t pes_len = pes_header.size() - 6 + len;
+    const uint16_t pes_len = pes_header.size() - 6 + len;
     pes_header[4] = (pes_len >> 8) & 0xFF;
     pes_header[5] = pes_len & 0xFF;
 

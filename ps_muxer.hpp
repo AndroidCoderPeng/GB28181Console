@@ -2,8 +2,10 @@
 // Created by peng on 2026/1/4.
 //
 
-#ifndef GB28181_PS_MUXER_HPP
-#define GB28181_PS_MUXER_HPP
+#ifndef GB28181CONSOLE_PS_MUXER_HPP
+#define GB28181CONSOLE_PS_MUXER_HPP
+
+#pragma once
 
 #include <mutex>
 #include <vector>
@@ -41,4 +43,4 @@ private:
     std::mutex _muxer_mutex{};
 };
 
-#endif //GB28181_PS_MUXER_HPP
+#endif //GB28181CONSOLE_PS_MUXER_HPP

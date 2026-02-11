@@ -3,7 +3,6 @@
 //
 
 #include "rtp_sender.hpp"
-#include "base_config.hpp"
 #include "utils.hpp"
 
 #include <cstdio>
@@ -149,60 +148,32 @@ RtpSender::~RtpSender() {
 }
 
 void RtpSender::sendDataPacket(const uint8_t* pkt, const size_t pkt_len, const bool is_end, const uint32_t timestamp) {
-    if (pkt_len <= MAX_RTP_PAYLOAD) {
-        // ========== 单个 RTP 包 ==========
-        uint8_t packet[MAX_RTP_PACKET];
-        fill_rtp_header(packet, is_end, timestamp);
-
-        // 填充负载
-        memcpy(packet + 12, pkt, pkt_len);
-        send_packet(packet, 12 + pkt_len);
-        _seq++;
-    } else {
-        // ========== 大包分片 ==========
-        size_t offset = 0;
-        size_t packet_count = 0;
-
-        const size_t total_packets = (pkt_len + MAX_RTP_PAYLOAD - 1) / MAX_RTP_PAYLOAD;
-
-        while (offset < pkt_len) {
-            const bool last_chunk = (offset + MAX_RTP_PAYLOAD >= pkt_len);
-            const size_t chunk_size = last_chunk ? (pkt_len - offset) : MAX_RTP_PAYLOAD;
-
-            uint8_t packet[MAX_RTP_PACKET];
-            fill_rtp_header(packet, last_chunk && is_end, timestamp);
-
-            // 填充负载
-            memcpy(packet + 12, pkt + offset, chunk_size);
-            send_packet(packet, 12 + chunk_size);
-            _seq++;
-            offset += chunk_size;
-            packet_count++;
-
-            // ==================== 包间延迟 ====================
-            // 只在关键帧且不是最后一包时添加延迟
-            if (is_end && packet_count < total_packets) {
-                // 0.1ms 延迟 = 100微秒
-                // 50包 × 0.1ms = 5ms 总延迟
-                std::this_thread::sleep_for(std::chrono::microseconds(100));
-            }
-        }
+    if (pkt == nullptr || pkt_len == 0 || pkt_len > MAX_RTP_PAYLOAD) {
+        std::cerr << "Invalid packet data: pkt=%p, len=%zu" << pkt << pkt_len << std::endl;
+        return;
     }
-}
 
-void RtpSender::fill_rtp_header(uint8_t* packet, const bool marker_bit, const uint32_t timestamp) const {
-    packet[0] = 0x80;
-    packet[1] = (marker_bit ? 0x80 : 0x00) | (_payload_type & 0x7F);
-    packet[2] = (_seq >> 8) & 0xFF;
-    packet[3] = _seq & 0xFF;
-    packet[4] = (timestamp >> 24) & 0xFF;
-    packet[5] = (timestamp >> 16) & 0xFF;
-    packet[6] = (timestamp >> 8) & 0xFF;
-    packet[7] = timestamp & 0xFF;
-    packet[8] = (_ssrc >> 24) & 0xFF;
-    packet[9] = (_ssrc >> 16) & 0xFF;
-    packet[10] = (_ssrc >> 8) & 0xFF;
-    packet[11] = _ssrc & 0xFF;
+    std::lock_guard<std::mutex> lock(_buffer_mutex);
+
+    // 填充 RTP 头 (12 bytes)
+    _rtp_buffer[0] = 0x80;
+    _rtp_buffer[1] = (is_end ? 0x80 : 0x00) | (_payload_type & 0x7F);
+    _rtp_buffer[2] = (_seq >> 8) & 0xFF;
+    _rtp_buffer[3] = _seq & 0xFF;
+    _rtp_buffer[4] = (timestamp >> 24) & 0xFF;
+    _rtp_buffer[5] = (timestamp >> 16) & 0xFF;
+    _rtp_buffer[6] = (timestamp >> 8) & 0xFF;
+    _rtp_buffer[7] = timestamp & 0xFF;
+    _rtp_buffer[8] = (_ssrc >> 24) & 0xFF;
+    _rtp_buffer[9] = (_ssrc >> 16) & 0xFF;
+    _rtp_buffer[10] = (_ssrc >> 8) & 0xFF;
+    _rtp_buffer[11] = _ssrc & 0xFF;
+
+    // 填充负载
+    memcpy(_rtp_buffer + 12, pkt, pkt_len);
+
+    send_packet(_rtp_buffer, 12 + pkt_len);
+    _seq++;
 }
 
 void RtpSender::send_packet(const uint8_t* rtp_packet, const size_t rtp_len) const {
@@ -213,14 +184,42 @@ void RtpSender::send_packet(const uint8_t* rtp_packet, const size_t rtp_len) con
         static_cast<uint8_t>(rtp_len & 0xFF)
     };
 
-    // 发送 header
-    const ssize_t sent = send(_rtp_socket, header, 4, MSG_NOSIGNAL);
-    if (sent != 4) {
-        std::cerr << "发送 header 失败，错误: " << strerror(errno) << std::endl;
-        return;
+    // 发送 header - 确保完整发送
+    size_t total_sent = 0;
+    while (total_sent < 4) {
+        const ssize_t sent = send(_rtp_socket, header + total_sent, 4 - total_sent, MSG_NOSIGNAL);
+        if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue; // 非阻塞模式下的正常情况，继续尝试
+            } else {
+                std::cerr << "发送 RTP 头部失败: " << strerror(errno) << std::endl;
+                return;
+            }
+        }
+        total_sent += sent;
     }
-    // 发送 RTP 数据
-    send(_rtp_socket, rtp_packet, rtp_len, MSG_NOSIGNAL);
+
+    // 发送 RTP 数据 - 确保完整发送
+    total_sent = 0;
+    while (total_sent < rtp_len) {
+        const ssize_t sent = send(_rtp_socket,
+                                  rtp_packet + total_sent,
+                                  rtp_len - total_sent,
+                                  MSG_NOSIGNAL);
+        if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue; // 非阻塞模式下的正常情况，继续尝试
+            } else {
+                std::cerr << "发送 RTP 数据失败，已发送 " << total_sent / rtp_len << " 字节，错误: " << strerror(errno) << std::endl;
+                return;
+            }
+        }
+        total_sent += sent;
+    }
+
+    if (total_sent != rtp_len) {
+        std::cerr << "RTP 数据发送不完整，期望 " << rtp_len << " 字节，实际发送 " << total_sent << " 字节" << std::endl;
+    }
 }
 
 void RtpSender::stop() {

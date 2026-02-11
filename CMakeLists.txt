@@ -58,6 +58,7 @@ add_executable(GB28181Console
         rtp_sender.cpp
         sip_register.cpp
         utils.cpp
+        h264_splitter.cpp
         header_builder.cpp
         audio_processor.cpp
         ps_muxer.cpp

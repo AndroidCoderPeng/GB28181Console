@@ -22,7 +22,4 @@
 #define VIDEO_STREAM_ID 0xE0 // 视频Stream ID
 #define AUDIO_STREAM_ID 0xBD // 音频Stream ID（私有流，常用于非 MPEG 音频，如 AC-3、DTS、G.711）
 
-#define MAX_RTP_PAYLOAD 1400      // RTP 负载最大长度（PS 分片大小）
-#define MAX_RTP_PACKET (12 + MAX_RTP_PAYLOAD)  // 完整 RTP 包最大长度（1412）
-
 #endif //GB28181_BASE_CONFIG_HPP
