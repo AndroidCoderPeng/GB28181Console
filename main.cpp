@@ -1,20 +1,20 @@
+#include <condition_variable>
 #include <csignal>
 #include <iostream>
 #include <opencv2/opencv.hpp>
-#include <condition_variable>
 
-#include "frame_capture.hpp"
-#include "video/frame_encoder.hpp"
-#include "sip_manager.hpp"
 #include "base_config.hpp"
+#include "frame_capture.hpp"
 #include "ps_muxer.hpp"
+#include "sip_manager.hpp"
+#include "video/frame_encoder.hpp"
 
 static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
 
 static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
-static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
 static std::unique_ptr<FrameEncoder> frame_encoder_ptr = nullptr;
 static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
+static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
 
 static std::atomic<bool> is_app_running{true};
 static std::atomic<bool> is_push_stream{false};
@@ -49,25 +49,17 @@ static void handle_sip_message(const int code, const std::string& message) {
     std::cout << "Response code: " << code << ", " << message << std::endl;
     switch (code) {
         case 200:
-        {
             std::cout << "SIP registration completed" << std::endl;
             break;
-        }
         case 201:
-        {
             std::cout << "SIP unregistration completed" << std::endl;
             break;
-        }
         case 1000:
-        {
             std::cout << "Video stream started" << std::endl;
             break;
-        }
         case 1001:
-        {
             std::cout << "Video stream stopped" << std::endl;
             break;
-        }
         default:
             break;
     }
