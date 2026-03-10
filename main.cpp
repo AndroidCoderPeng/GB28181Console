@@ -19,6 +19,7 @@ static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
 static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
 
 static std::atomic<bool> is_app_running{true};
+static std::atomic<bool> is_registered{false};
 static std::atomic<bool> is_push_stream{false};
 static std::atomic<uint32_t> frame_count{0};
 
@@ -75,36 +76,39 @@ void cleanup() {
 }
 
 // ============================================================
-//
+// SIP管理
 // ============================================================
 static void handle_sip_message(const int code, const std::string& message) {
-    std::cout << "Response code: " << code << ", " << message << std::endl;
-    switch (code) {
-        case 200:
-            std::cout << "SIP registration completed" << std::endl;
-            break;
-        case 201:
-            std::cout << "SIP unregistration completed" << std::endl;
-            break;
-        case 1000:
-            std::cout << "Video stream started" << std::endl;
-            break;
-        case 1001:
-            std::cout << "Video stream stopped" << std::endl;
-            break;
-        default:
-            break;
-    }
+    logger_ptr->dBox().addFmt("响应码：%d", code).add(message).print();
+    if (code == 1000) {
+        // 注册成功
+        is_registered = true;
+    } else if (code == 201) {
+        // 注销成功
+        is_registered = false;
+    } else if (code == 2100) {
+        // 开始推流
+        is_push_stream = true;
+    } else if (code == 2101) {
+        // 停止推流
+        is_push_stream = false;
+    } else if (code == 2200) {
+        // 开始播放对讲语音
+    } else
+        if (code == 2201) {}
 }
 
-static void play_audio_in_pcm(const std::vector<int16_t> pcm, const size_t samples) {
+static void play_audio_in_pcm(int16_t* pcm, const size_t samples) {
     std::cout << "Playing audio in PCM" << std::endl;
 }
 
-static void play_audio_in_g711(const std::vector<int8_t> g711, const size_t samples) {
+static void play_audio_in_g711(uint8_t* g711, const size_t samples) {
     std::cout << "Playing audio in G711" << std::endl;
 }
 
+// ============================================================
+// 主进程
+// ============================================================
 int main() {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -152,16 +156,17 @@ int main() {
     param.password = "1234qwer";
     param.longitude = 116.3975;
     param.latitude = 39.9085;
-    sip_manager_ptr = std::make_unique<SipManager>(param);
-    // sip_manager_ptr->doRegister([](const int code, const std::string& message) {
-    //                                 handle_sip_message(code, message);
-    //                             },
-    //                             [](const std::vector<int16_t>& pcm, const size_t samples) {
-    //                                 play_audio_in_pcm(pcm, samples);
-    //                             },
-    //                             [](const std::vector<int8_t>& g711, const size_t samples) {
-    //                                 play_audio_in_g711(g711, samples);
-    //                             });
+    sip_manager_ptr = std::make_unique<SipManager>(param,
+                                                   [](const int code, const std::string& message) {
+                                                       handle_sip_message(code, message);
+                                                   },
+                                                   [](int16_t* pcm, const size_t len) {
+                                                       play_audio_in_pcm(pcm, len);
+                                                   },
+                                                   [](uint8_t* g711, const size_t len) {
+                                                       play_audio_in_g711(g711, len);
+                                                   });
+    sip_manager_ptr->login();
     logger_ptr->i("System running... Press Ctrl+C to exit.");
 
     // 等待退出信号

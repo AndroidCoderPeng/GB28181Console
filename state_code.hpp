@@ -9,7 +9,7 @@
 
 class StateCode {
 public:
-    static std::string toString(int code) {
+    static std::string toString(const int code) {
         switch (code) {
             // ==========================================
             // 1xx 临时响应 (Provisional)

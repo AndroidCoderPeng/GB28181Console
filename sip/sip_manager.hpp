@@ -20,10 +20,17 @@
 
 class SipManager : public IEventObserver, public IMediaObserver, public IStreamObserver {
 public:
+    using SipStateCallback = std::function<void(int, const std::string&)>;
+
+    using PcmDataCallback = std::function<void(int16_t*, size_t)>;
+
+    using G711DataCallback = std::function<void(uint8_t*, size_t)>;
+
     /**
      * 初始化 eXosip 栈
      */
-    explicit SipManager(const Sip::SipParameter& parameter);
+    explicit SipManager(const Sip::SipParameter& parameter, const SipStateCallback& sip_state_callback,
+                        const PcmDataCallback& pcm_data_callback, const G711DataCallback& g711_data_callback);
 
     void login() const;
 
@@ -64,13 +71,6 @@ public:
 
     void onStreamStateChanged(int code, const std::string& message) override;
 
-// signals:
-//     void sipStateSignal(int code, const std::string& msg);
-//
-//     void pcmDataSignal(const std::vector<int16_t>& pcm);
-//
-//     void g711DataSignal(const QByteArray& g711);
-
 private:
     Logger _logger;
 
@@ -87,6 +87,10 @@ private:
 
     // 通道编号
     std::atomic<int> _sn_counter{1};
+
+    SipStateCallback _sip_state_callback = nullptr;
+    PcmDataCallback _pcm_data_callback = nullptr;
+    G711DataCallback _g711_data_callback = nullptr;
 
     /**
      * sip事件循环
