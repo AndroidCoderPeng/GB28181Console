@@ -19,7 +19,9 @@
 #define G711_FRAME_SIZE 160
 #define RING_BUFFER_SIZE (256 * 1024)  // 256KB环形缓冲
 
-AudioReceiver::AudioReceiver() : _logger("AudioReceiver") {}
+AudioReceiver::AudioReceiver() : _logger("AudioReceiver") {
+    _logger.i("AudioReceiver created");
+}
 
 AudioReceiver::~AudioReceiver() {
     stop();

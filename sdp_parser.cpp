@@ -8,7 +8,9 @@
 
 #include "utils.hpp"
 
-SdpParser::SdpParser() : _logger("SdpParser") {}
+SdpParser::SdpParser() : _logger("SdpParser") {
+    _logger.i("SdpParser created");
+}
 
 SdpStruct SdpParser::parse(const std::string& sdp) {
     // 提取 c= 行的 IP【c=IN IP4 111.198.10.15】

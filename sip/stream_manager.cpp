@@ -12,7 +12,7 @@
 StreamManager::StreamManager(SipContext* context, IStreamObserver* observer) : _logger("StreamManager"),
                                                                                _sip_context_ptr(context),
                                                                                _stream_observer_ptr(observer) {
-    _logger.d("StreamManager created");
+    _logger.i("StreamManager created");
 }
 
 void StreamManager::handleVideoInvite(eXosip_event_t* event) {

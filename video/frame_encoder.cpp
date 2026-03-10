@@ -56,14 +56,10 @@ FrameEncoder::FrameEncoder(const size_t bufferSize) : _logger("FrameEncoder") {
     _packet_ptr = av_packet_alloc();
 
     // 初始化SwsContext（用于BGR到YUV420P转换）
-    _sws_ctx_ptr = sws_getContext(
-                                  _codec_ctx_ptr->width, _codec_ctx_ptr->height, AV_PIX_FMT_BGR24,
+    _sws_ctx_ptr = sws_getContext(_codec_ctx_ptr->width, _codec_ctx_ptr->height, AV_PIX_FMT_BGR24,
                                   _codec_ctx_ptr->width, _codec_ctx_ptr->height, AV_PIX_FMT_YUV420P,
                                   SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
-}
-
-void FrameEncoder::setH264DataCallback(const H264DataCallback& callback) {
-    _h264_callback = callback;
+    _logger.i("FrameEncoder created");
 }
 
 void FrameEncoder::pushFrame(const cv::Mat& frame) {
@@ -90,7 +86,8 @@ void FrameEncoder::pushFrame(const cv::Mat& frame) {
     _encode_cv.notify_one(); // 通知编码线程
 }
 
-void FrameEncoder::start() {
+void FrameEncoder::start(const H264DataCallback& callback) {
+    _h264_callback = callback;
     _is_running = true;
     _encode_thread_ptr = std::make_unique<std::thread>(&FrameEncoder::encode_loop, this);
 }

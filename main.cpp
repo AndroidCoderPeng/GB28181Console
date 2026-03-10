@@ -13,10 +13,10 @@
 static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
 
 static std::unique_ptr<Logger> logger_ptr = nullptr;
-static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
 static std::unique_ptr<FrameEncoder> frame_encoder_ptr = nullptr;
-static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
+static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
 static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
+static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
 
 static std::atomic<bool> is_app_running{true};
 static std::atomic<bool> is_push_stream{false};
@@ -77,17 +77,6 @@ void cleanup() {
 // ============================================================
 //
 // ============================================================
-static void handle_camera_error(const std::string& error) {
-    std::cerr << "Camera error: " << error << std::endl;
-}
-
-static void handle_camera_frame(const cv::Mat& frame) {
-    // / 将帧推入编码器的环形缓冲区并触发编码
-    if (frame_encoder_ptr) {
-        frame_encoder_ptr->pushFrame(frame);
-    }
-}
-
 static void handle_sip_message(const int code, const std::string& message) {
     std::cout << "Response code: " << code << ", " << message << std::endl;
     switch (code) {
@@ -121,47 +110,49 @@ int main() {
     signal(SIGTERM, signal_handler);
     logger_ptr = std::make_unique<Logger>("main");
 
-    // frame_encoder_ptr = std::make_unique<FrameEncoder>(VIDEO_FPS);
-    // frame_encoder_ptr->setH264DataCallback([](const std::vector<uint8_t>& h264) {
-    //     if (h264.empty()) {
-    //         return;
-    //     }
-    //     if (is_push_stream.load()) {
-    //         // 计算 90kHz 时间戳（固定帧率）
-    //         // 每帧间隔 = 90000 / 25 = 3600
-    //         const uint32_t pts_90k = frame_count * (TIMESTAMP_BASE / VIDEO_FPS);
-    //
-    //         PsMuxer::get()->writeVideoFrame(h264.data(), pts_90k, h264.size());
-    //         frame_count.fetch_add(1, std::memory_order_relaxed);
-    //     }
-    // });
-    // frame_encoder_ptr->start();
-    // std::cout << "Frame encoder started" << std::endl;
-    //
-    // // 摄像头采集
-    // frame_capture_ptr = std::make_unique<FrameCapture>(0, [](const std::string& error) {
-    //                                                        handle_camera_error(error);
-    //                                                    },
-    //                                                    [](const cv::Mat& frame) {
-    //                                                        handle_camera_frame(frame);
-    //                                                    });
-    // capture_thread_ptr = std::make_unique<std::thread>(&FrameCapture::start, frame_capture_ptr.get());
-    // std::cout << "Camera capturing started" << std::endl;
-    //
-    // // Sip注册
-    // Sip::SipParameter param;
-    // param.localHost = std::string("192.168.3.131");
-    // param.serverHost = std::string("111.198.10.15");
-    // param.serverPort = 22117;
-    // param.serverCode = std::string("11010800002000000002");
-    // param.serverDomain = std::string("1101080000");
-    // param.deviceCode = std::string("11010800001300011118");
-    // param.serialNumber = std::string("");
-    // param.deviceName = std::string("L1300011118");
-    // param.password = std::string("1234qwer");
-    // param.longitude = 116.3975;
-    // param.latitude = 39.9085;
-    // sip_manager_ptr = std::make_unique<SipManager>(param);
+    frame_encoder_ptr = std::make_unique<FrameEncoder>(VIDEO_FPS);
+    frame_encoder_ptr->start([](const std::vector<uint8_t>& h264) {
+        if (h264.empty()) {
+            return;
+        }
+        if (is_push_stream.load()) {
+            // 计算 90kHz 时间戳（固定帧率）
+            // 每帧间隔 = 90000 / 25 = 3600
+            const uint32_t pts_90k = frame_count * (TIMESTAMP_BASE / VIDEO_FPS);
+
+            PsMuxer::get()->writeVideoFrame(h264.data(), pts_90k, h264.size());
+            frame_count.fetch_add(1, std::memory_order_relaxed);
+        }
+    });
+    logger_ptr->i("Frame encoder started");
+
+    // 摄像头采集
+    frame_capture_ptr = std::make_unique<FrameCapture>(0);
+    frame_capture_ptr->setCameraCallback([](const std::string& error) {
+                                             logger_ptr->eFmt("Camera error: %s", error.c_str());
+                                         },
+                                         [](const cv::Mat& frame) {
+                                             if (frame_encoder_ptr) {
+                                                 frame_encoder_ptr->pushFrame(frame);
+                                             }
+                                         });
+    capture_thread_ptr = std::make_unique<std::thread>(&FrameCapture::start, frame_capture_ptr.get());
+    logger_ptr->i("Camera capturing started");
+
+    // Sip注册
+    Sip::SipParameter param;
+    param.localHost = "192.168.3.131";
+    param.serverHost = "111.198.10.15";
+    param.serverPort = 22117;
+    param.serverCode = "11010800002000000002";
+    param.serverDomain = "1101080000";
+    param.deviceCode = "11010800001300011118";
+    param.serialNumber = "";
+    param.deviceName = "L1300011118";
+    param.password = "1234qwer";
+    param.longitude = 116.3975;
+    param.latitude = 39.9085;
+    sip_manager_ptr = std::make_unique<SipManager>(param);
     // sip_manager_ptr->doRegister([](const int code, const std::string& message) {
     //                                 handle_sip_message(code, message);
     //                             },
@@ -171,9 +162,9 @@ int main() {
     //                             [](const std::vector<int8_t>& g711, const size_t samples) {
     //                                 play_audio_in_g711(g711, samples);
     //                             });
+    logger_ptr->i("System running... Press Ctrl+C to exit.");
 
     // 等待退出信号
-    logger_ptr->i("System running... Press Ctrl+C to exit.");
     std::unique_lock<std::mutex> lock(exit_mutex);
     exit_cv.wait(lock, [] {
         return !is_app_running.load();

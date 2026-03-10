@@ -7,9 +7,13 @@
 
 #include <chrono>
 
-FrameCapture::FrameCapture(const int index, const CameraErrorCallback& error_callback,
-                           const CameraFrameCallback& frame_callback) : _logger("FrameCapture") {
+FrameCapture::FrameCapture(const int index) : _logger("FrameCapture") {
     _index = index;
+    _logger.i("FrameCapture created");
+}
+
+void FrameCapture::setCameraCallback(const CameraErrorCallback& error_callback,
+                                     const CameraFrameCallback& frame_callback) {
     _error_callback = error_callback;
     _frame_callback = frame_callback;
 }

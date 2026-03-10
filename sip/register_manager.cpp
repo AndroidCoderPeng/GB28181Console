@@ -9,7 +9,7 @@
 #include "state_code.hpp"
 
 RegisterManager::RegisterManager(SipContext* context) : _logger("RegisterManager"), _sip_context_ptr(context) {
-    _logger.d("RegisterManager created");
+    _logger.i("RegisterManager created");
 }
 
 void RegisterManager::setStateCallback(StateCallback callback) {

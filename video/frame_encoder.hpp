@@ -25,12 +25,10 @@ public:
 
     explicit FrameEncoder(size_t bufferSize = 3);
 
-    void setH264DataCallback(const H264DataCallback& callback);
-
     // 生产者：快速写入
     void pushFrame(const cv::Mat& frame);
 
-    void start();
+    void start(const H264DataCallback& callback);
 
     void stop();
 

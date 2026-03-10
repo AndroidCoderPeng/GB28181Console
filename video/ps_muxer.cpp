@@ -126,7 +126,9 @@ static void buildPesPacket(const uint8_t stream_id, const uint8_t* payload, size
     }
 }
 
-PsMuxer::PsMuxer() : _logger("PsMuxer") {}
+PsMuxer::PsMuxer() : _logger("PsMuxer") {
+    _logger.i("PsMuxer created");
+}
 
 /**
  * 视频帧：H.264，时间基已经设置为90kHz

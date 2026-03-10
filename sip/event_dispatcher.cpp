@@ -19,7 +19,7 @@ EventDispatcher::EventDispatcher(SipContext* sip_context, RegisterManager* regis
                                                                    _register_mgr_ptr(register_mgr),
                                                                    _event_observer_ptr(event_observer),
                                                                    _media_observer_ptr(media_observer) {
-    _logger.d("EventDispatcher created");
+    _logger.i("EventDispatcher created");
 }
 
 void EventDispatcher::dispatchEvent(eXosip_event_t* event) {

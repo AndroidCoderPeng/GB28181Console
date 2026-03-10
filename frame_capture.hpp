@@ -17,8 +17,9 @@ public:
     using CameraErrorCallback = std::function<void(const std::string&)>;
     using CameraFrameCallback = std::function<void(cv::Mat mat)>;
 
-    explicit FrameCapture(int index, const CameraErrorCallback& error_callback,
-                          const CameraFrameCallback& frame_callback);
+    explicit FrameCapture(int index);
+
+    void setCameraCallback(const CameraErrorCallback& error_callback, const CameraFrameCallback& frame_callback);
 
     ~FrameCapture();
 
