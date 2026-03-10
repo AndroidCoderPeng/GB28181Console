@@ -5,7 +5,7 @@
 
 #include "frame_capture.hpp"
 #include "video/frame_encoder.hpp"
-#include "sip_register.hpp"
+#include "sip_manager.hpp"
 #include "base_config.hpp"
 #include "ps_muxer.hpp"
 
@@ -14,7 +14,7 @@ static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
 static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
 static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
 static std::unique_ptr<FrameEncoder> frame_encoder_ptr = nullptr;
-static std::unique_ptr<SipRegister> sip_register_ptr = nullptr;
+static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
 
 static std::atomic<bool> is_app_running{true};
 static std::atomic<bool> is_push_stream{false};
@@ -82,8 +82,8 @@ static void play_audio_in_g711(const std::vector<int8_t> g711, const size_t samp
 }
 
 void cleanup() {
-    if (sip_register_ptr) {
-        sip_register_ptr->unRegister();
+    if (sip_manager_ptr) {
+        sip_manager_ptr->logout();
     }
 
     if (frame_capture_ptr) {
@@ -137,26 +137,28 @@ int main() {
     std::cout << "Camera capturing started" << std::endl;
 
     // Sip注册
-    sip_register_ptr = std::make_unique<SipRegister>("192.168.3.131",
-                                                     "111.198.10.15",
-                                                     22117,
-                                                     "11010800002000000002",
-                                                     "1101080000",
-                                                     "11010800001300011118",
-                                                     "",
-                                                     "L1300011118",
-                                                     "1234qwer",
-                                                     116.3975,
-                                                     39.9085);
-    sip_register_ptr->doRegister([](const int code, const std::string& message) {
-                                     handle_sip_message(code, message);
-                                 },
-                                 [](const std::vector<int16_t>& pcm, const size_t samples) {
-                                     play_audio_in_pcm(pcm, samples);
-                                 },
-                                 [](const std::vector<int8_t>& g711, const size_t samples) {
-                                     play_audio_in_g711(g711, samples);
-                                 });
+    Sip::SipParameter param;
+    param.localHost = std::string("192.168.3.131");
+    param.serverHost = std::string("111.198.10.15");
+    param.serverPort = 22117;
+    param.serverCode = std::string("11010800002000000002");
+    param.serverDomain = std::string("1101080000");
+    param.deviceCode = std::string("11010800001300011118");
+    param.serialNumber = std::string("");
+    param.deviceName = std::string("L1300011118");
+    param.password = std::string("1234qwer");
+    param.longitude = 116.3975;
+    param.latitude = 39.9085;
+    sip_manager_ptr = std::make_unique<SipManager>(param);
+    // sip_manager_ptr->doRegister([](const int code, const std::string& message) {
+    //                                 handle_sip_message(code, message);
+    //                             },
+    //                             [](const std::vector<int16_t>& pcm, const size_t samples) {
+    //                                 play_audio_in_pcm(pcm, samples);
+    //                             },
+    //                             [](const std::vector<int8_t>& g711, const size_t samples) {
+    //                                 play_audio_in_g711(g711, samples);
+    //                             });
 
     // 保持主线程运行
     std::cout << "System running... Press Ctrl+C to exit." << std::endl;
