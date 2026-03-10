@@ -5,12 +5,14 @@
 
 #include "base_config.hpp"
 #include "frame_capture.hpp"
+#include "logger.hpp"
 #include "ps_muxer.hpp"
 #include "sip_manager.hpp"
 #include "video/frame_encoder.hpp"
 
 static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
 
+static std::unique_ptr<Logger> logger_ptr = nullptr;
 static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
 static std::unique_ptr<FrameEncoder> frame_encoder_ptr = nullptr;
 static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
@@ -23,17 +25,58 @@ static std::atomic<uint32_t> frame_count{0};
 static std::mutex exit_mutex;
 static std::condition_variable exit_cv;
 
-// 前向声明清理函数
-void cleanup();
-
+// ============================================================
+// 信号处理以及程序清理
+// ============================================================
 void signal_handler(const int signal) {
-    if (signal == SIGINT) {
-        std::cout << "Received SIGINT, cleaning up..." << std::endl;
+    if (signal == SIGINT || signal == SIGTERM) {
+        logger_ptr->dBox()
+                  .addFmt("received signal %d", signal)
+                  .add("cleaning up...")
+                  .print();
         is_app_running = false;
         exit_cv.notify_all();
     }
 }
 
+void cleanup() {
+    logger_ptr->i("Starting cleanup process...");
+
+    is_push_stream = false;
+
+    if (sip_manager_ptr) {
+        logger_ptr->i("Stopping SIP manager...");
+        sip_manager_ptr->logout();
+        sip_manager_ptr->shutdown();
+    }
+
+    if (frame_capture_ptr) {
+        logger_ptr->i("Stopping frame capture...");
+        frame_capture_ptr->stop();
+    }
+
+    if (capture_thread_ptr && capture_thread_ptr->joinable()) {
+        logger_ptr->i("Waiting for frame encoder thread to finish...");
+        capture_thread_ptr->join();
+        capture_thread_ptr.reset();
+    }
+    frame_capture_ptr.reset();
+
+    if (frame_encoder_ptr) {
+        logger_ptr->i("Stopping frame encoder...");
+        frame_encoder_ptr->stop();
+        frame_encoder_ptr.reset();
+    }
+
+    logger_ptr->i("Releasing PS muxer...");
+    PsMuxer::get()->release();
+
+    logger_ptr->i("Cleanup completed.");
+}
+
+// ============================================================
+//
+// ============================================================
 static void handle_camera_error(const std::string& error) {
     std::cerr << "Camera error: " << error << std::endl;
 }
@@ -73,75 +116,52 @@ static void play_audio_in_g711(const std::vector<int8_t> g711, const size_t samp
     std::cout << "Playing audio in G711" << std::endl;
 }
 
-void cleanup() {
-    if (sip_manager_ptr) {
-        sip_manager_ptr->logout();
-    }
-
-    if (frame_capture_ptr) {
-        frame_capture_ptr->stop();
-    }
-    if (capture_thread_ptr && capture_thread_ptr->joinable()) {
-        capture_thread_ptr->join();
-        capture_thread_ptr.reset();
-    }
-    frame_capture_ptr.reset();
-
-    if (frame_encoder_ptr) {
-        frame_encoder_ptr->stop();
-        frame_encoder_ptr.reset();
-    }
-
-    std::cout << "Cleanup completed." << std::endl;
-}
-
 int main() {
     signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    logger_ptr = std::make_unique<Logger>("main");
 
-    // 设置输出缓冲，确保能立即看到输出
-    std::cout << std::unitbuf;
-
-    frame_encoder_ptr = std::make_unique<FrameEncoder>(VIDEO_FPS);
-    frame_encoder_ptr->setH264DataCallback([](const std::vector<uint8_t>& h264) {
-        if (h264.empty()) {
-            return;
-        }
-        if (is_push_stream.load()) {
-            // 计算 90kHz 时间戳（固定帧率）
-            // 每帧间隔 = 90000 / 25 = 3600
-            const uint32_t pts_90k = frame_count * (TIMESTAMP_BASE / VIDEO_FPS);
-
-            PsMuxer::get()->writeVideoFrame(h264.data(), pts_90k, h264.size());
-            frame_count.fetch_add(1, std::memory_order_relaxed);
-        }
-    });
-    frame_encoder_ptr->start();
-    std::cout << "Frame encoder started" << std::endl;
-
-    // 摄像头采集
-    frame_capture_ptr = std::make_unique<FrameCapture>(0, [](const std::string& error) {
-                                                           handle_camera_error(error);
-                                                       },
-                                                       [](const cv::Mat& frame) {
-                                                           handle_camera_frame(frame);
-                                                       });
-    capture_thread_ptr = std::make_unique<std::thread>(&FrameCapture::start, frame_capture_ptr.get());
-    std::cout << "Camera capturing started" << std::endl;
-
-    // Sip注册
-    Sip::SipParameter param;
-    param.localHost = std::string("192.168.3.131");
-    param.serverHost = std::string("111.198.10.15");
-    param.serverPort = 22117;
-    param.serverCode = std::string("11010800002000000002");
-    param.serverDomain = std::string("1101080000");
-    param.deviceCode = std::string("11010800001300011118");
-    param.serialNumber = std::string("");
-    param.deviceName = std::string("L1300011118");
-    param.password = std::string("1234qwer");
-    param.longitude = 116.3975;
-    param.latitude = 39.9085;
-    sip_manager_ptr = std::make_unique<SipManager>(param);
+    // frame_encoder_ptr = std::make_unique<FrameEncoder>(VIDEO_FPS);
+    // frame_encoder_ptr->setH264DataCallback([](const std::vector<uint8_t>& h264) {
+    //     if (h264.empty()) {
+    //         return;
+    //     }
+    //     if (is_push_stream.load()) {
+    //         // 计算 90kHz 时间戳（固定帧率）
+    //         // 每帧间隔 = 90000 / 25 = 3600
+    //         const uint32_t pts_90k = frame_count * (TIMESTAMP_BASE / VIDEO_FPS);
+    //
+    //         PsMuxer::get()->writeVideoFrame(h264.data(), pts_90k, h264.size());
+    //         frame_count.fetch_add(1, std::memory_order_relaxed);
+    //     }
+    // });
+    // frame_encoder_ptr->start();
+    // std::cout << "Frame encoder started" << std::endl;
+    //
+    // // 摄像头采集
+    // frame_capture_ptr = std::make_unique<FrameCapture>(0, [](const std::string& error) {
+    //                                                        handle_camera_error(error);
+    //                                                    },
+    //                                                    [](const cv::Mat& frame) {
+    //                                                        handle_camera_frame(frame);
+    //                                                    });
+    // capture_thread_ptr = std::make_unique<std::thread>(&FrameCapture::start, frame_capture_ptr.get());
+    // std::cout << "Camera capturing started" << std::endl;
+    //
+    // // Sip注册
+    // Sip::SipParameter param;
+    // param.localHost = std::string("192.168.3.131");
+    // param.serverHost = std::string("111.198.10.15");
+    // param.serverPort = 22117;
+    // param.serverCode = std::string("11010800002000000002");
+    // param.serverDomain = std::string("1101080000");
+    // param.deviceCode = std::string("11010800001300011118");
+    // param.serialNumber = std::string("");
+    // param.deviceName = std::string("L1300011118");
+    // param.password = std::string("1234qwer");
+    // param.longitude = 116.3975;
+    // param.latitude = 39.9085;
+    // sip_manager_ptr = std::make_unique<SipManager>(param);
     // sip_manager_ptr->doRegister([](const int code, const std::string& message) {
     //                                 handle_sip_message(code, message);
     //                             },
@@ -152,20 +172,12 @@ int main() {
     //                                 play_audio_in_g711(g711, samples);
     //                             });
 
-    // 保持主线程运行
-    std::cout << "System running... Press Ctrl+C to exit." << std::endl;
-
     // 等待退出信号
-    {
-        std::unique_lock<std::mutex> lock(exit_mutex);
-        exit_cv.wait(lock, [] {
-            return !is_app_running.load();
-        });
-    }
-
-    // 执行清理
+    logger_ptr->i("System running... Press Ctrl+C to exit.");
+    std::unique_lock<std::mutex> lock(exit_mutex);
+    exit_cv.wait(lock, [] {
+        return !is_app_running.load();
+    });
     cleanup();
-
-    std::cout << "System exited successfully." << std::endl;
     return 0;
 }

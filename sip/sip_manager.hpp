@@ -64,12 +64,12 @@ public:
 
     void onStreamStateChanged(int code, const std::string& message) override;
 
-signals:
-    void sipStateSignal(int code, const std::string& msg);
-
-    void pcmDataSignal(const std::vector<int16_t>& pcm);
-
-    void g711DataSignal(const QByteArray& g711);
+// signals:
+//     void sipStateSignal(int code, const std::string& msg);
+//
+//     void pcmDataSignal(const std::vector<int16_t>& pcm);
+//
+//     void g711DataSignal(const QByteArray& g711);
 
 private:
     Logger _logger;

@@ -21,7 +21,7 @@ SipManager::SipManager(const Sip::SipParameter& parameter) : _logger("SipManager
 
     _register_mgr_ptr = std::make_unique<RegisterManager>(_sip_context_ptr.get());
     _register_mgr_ptr->setStateCallback([this](const int error_code) {
-        emit sipStateSignal(error_code, StateCode::toString(error_code));
+        // emit sipStateSignal(error_code, StateCode::toString(error_code));
     });
 
     _event_dispatcher_ptr = std::make_unique<EventDispatcher>(_sip_context_ptr.get(),
@@ -36,7 +36,7 @@ SipManager::SipManager(const Sip::SipParameter& parameter) : _logger("SipManager
         _is_sip_loop_running = true;
         _sip_event_thread_ptr = std::make_unique<std::thread>(&SipManager::sip_event_loop, this);
     } catch (const std::exception& e) {
-        emit sipStateSignal(3003, StateCode::toString(3003));
+        // emit sipStateSignal(3003, StateCode::toString(3003));
         _is_sip_loop_running = false;
         _sip_context_ptr->destroy();
         throw;
@@ -137,7 +137,7 @@ void SipManager::onLoginSuccess() {
     }
     _heartbeat_manager_ptr->start();
 
-    emit sipStateSignal(1000, StateCode::toString(1000));
+    // emit sipStateSignal(1000, StateCode::toString(1000));
 }
 
 void SipManager::onLogoutSuccess() {
@@ -161,12 +161,12 @@ void SipManager::onLogoutSuccess() {
         _logger.i("已移除eXosip注册记录");
     }
 
-    emit sipStateSignal(201, StateCode::toString(201));
+    // emit sipStateSignal(201, StateCode::toString(201));
     _logger.iBox().add("注销成功").add("保留eXosip资源，可再次注册").print();
 }
 
 void SipManager::onEventError(const int code, const std::string& message) {
-    emit sipStateSignal(code, message);
+    // emit sipStateSignal(code, message);
 }
 
 void SipManager::onStartPushStream(eXosip_event_t* event) {
@@ -186,17 +186,17 @@ void SipManager::onMediaClosed(const int cid) {
 }
 
 void SipManager::onG711DataReceived(uint8_t* g711, const size_t len) {
-    const QByteArray g711_data(reinterpret_cast<const char*>(g711), static_cast<int>(len));
-    emit g711DataSignal(g711_data);
+    // const QByteArray g711_data(reinterpret_cast<const char*>(g711), static_cast<int>(len));
+    // emit g711DataSignal(g711_data);
 }
 
 void SipManager::onPcmDataReceived(int16_t* pcm, const size_t samples) {
-    const std::vector<int16_t> pcm_data(pcm, pcm + samples);
-    emit pcmDataSignal(pcm_data);
+    // const std::vector<int16_t> pcm_data(pcm, pcm + samples);
+    // emit pcmDataSignal(pcm_data);
 }
 
 void SipManager::onStreamStateChanged(const int code, const std::string& message) {
-    emit sipStateSignal(code, message);
+    // emit sipStateSignal(code, message);
 }
 
 // ----------------------------- 私有函数 ----------------------------- //
@@ -214,7 +214,7 @@ void SipManager::sip_event_loop() {
     // 主循环：持续运行直到收到停止信号
     while (_is_sip_loop_running.load()) {
         if (!_sip_context_ptr->isValid()) {
-            emit sipStateSignal(1107, StateCode::toString(1107));
+            // emit sipStateSignal(1107, StateCode::toString(1107));
             break;
         }
 

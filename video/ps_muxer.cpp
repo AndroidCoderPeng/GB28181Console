@@ -126,6 +126,8 @@ static void buildPesPacket(const uint8_t stream_id, const uint8_t* payload, size
     }
 }
 
+PsMuxer::PsMuxer() : _logger("PsMuxer") {}
+
 /**
  * 视频帧：H.264，时间基已经设置为90kHz
  * - 一个 cv::Mat 经过编码后可能包含多种NALU类型，但是至多只有一个IDR
