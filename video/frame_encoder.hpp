@@ -12,6 +12,8 @@
 #include <functional>
 #include <opencv2/core/mat.hpp>
 
+#include "logger.hpp"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
@@ -43,13 +45,15 @@ private:
         size_t capacity;             // 容量
     } _ringBuffer;
 
+    Logger _logger;
+
     AVCodecContext* _codec_ctx_ptr = nullptr;
     AVFrame* _frame_ptr = nullptr;
     AVPacket* _packet_ptr = nullptr;
     SwsContext* _sws_ctx_ptr = nullptr;
 
     // 编码相关
-    std::thread* _encode_thread_ptr = nullptr;
+    std::unique_ptr<std::thread> _encode_thread_ptr = nullptr;
     std::mutex _mutex;
     std::atomic<bool> _is_running{false};
     std::condition_variable _encode_cv;

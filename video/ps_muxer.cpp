@@ -3,31 +3,29 @@
 //
 
 #include "ps_muxer.hpp"
-#include "audio_processor.hpp"
-#include "base_config.hpp"
+
+#include <cstring>
+#include <string>
+
 #include "h264_splitter.hpp"
 #include "header_builder.hpp"
 #include "rtp_sender.hpp"
 #include "utils.hpp"
+#include "audio/audio_processor.hpp"
 
-#include <iostream>
-#include <iomanip>
+#define STREAM_TYPE_H264 0x1B // 视频Stream Type
+#define STREAM_TYPE_SVAC_VIDEO 0x80 // 视频Stream Type
+
+#define STREAM_TYPE_G711 0x91 // 音频Stream Type
+#define STREAM_TYPE_SVAC_AUDIO 0x9B // 音频Stream Type
+
+#define VIDEO_STREAM_ID 0xE0 // 视频Stream ID
+#define AUDIO_STREAM_ID 0xBD // 音频Stream ID（私有流，常用于非 MPEG 音频，如 AC-3、DTS、G.711）
 
 // GB28181 标准：每个 PS 包的最大大小（考虑 MTU 1500，减去 IP/UDP/RTP 头部）
 // PS包 = PS Header(14) + System Header(~18) + PSM(~24) + PES Header(~19) + Payload
 // 为了确保不超过 MTU，PES 负载应控制在 1300 字节以内
 static constexpr size_t MAX_PES_PAYLOAD_PER_PACKET = 1300;
-
-static void print(const std::string& tag, const std::vector<uint8_t>& data) {
-    std::string str;
-    for (const unsigned char s : data) {
-        char hex_byte[8];
-        snprintf(hex_byte, sizeof(hex_byte), "%02X ", s);
-        str += hex_byte;
-    }
-
-    std::cout << "size: " << data.size() << ", " << tag << ": " << str << std::endl;
-}
 
 /**
  * 封装 PS 包，其实就是把 PES 包转为 PS 包，通俗来说就是将音视频同一化，方便后续封装为PS流
@@ -47,7 +45,8 @@ static void buildPsPacket(const uint8_t* payload, const size_t len, const uint64
     std::vector<uint8_t> config{};
     if (is_key_frame) {
         config = HeaderBuilder::buildSystemHeader(VIDEO_STREAM_ID, AUDIO_STREAM_ID);
-        auto psm = HeaderBuilder::buildPsMap();
+        auto psm = HeaderBuilder::buildPsMap(STREAM_TYPE_H264,VIDEO_STREAM_ID,
+                                             STREAM_TYPE_G711,AUDIO_STREAM_ID);
         config.insert(config.end(), psm.begin(), psm.end());
     }
 
@@ -120,14 +119,10 @@ static void buildPesPacket(const uint8_t stream_id, const uint8_t* payload, size
 
             buildPsPacket(pes_pkt.data(), pes_pkt.size(), pts_90k, mark_as_key);
 
-            std::cout << "PES分片[" << packet_index << "]: offset=" << offset <<
-                    ", size=" << chunk_size << ", remaining=" << remaining << std::endl;
-
             offset += chunk_size;
             remaining -= chunk_size;
             packet_index++;
         }
-        std::cout << "PES分片完成: 总大小=" << len << ", 分片数=" << packet_index << std::endl;
     }
 }
 
@@ -145,9 +140,9 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
     std::lock_guard<std::mutex> lock(_muxer_mutex);
 
     std::vector<NALU> nalu_vector{};
-    const int nalu_count = H264Splitter::splitH264Frame(h264_data, size, nalu_vector);
+    const size_t nalu_count = H264Splitter::get()->splitH264Frame(h264_data, size, nalu_vector);
     if (nalu_count == 0) {
-        std::cerr << "H.264 frame is empty" << std::endl;
+        _logger.e("H.264 frame is empty");
         return;
     }
 
@@ -172,17 +167,18 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
             case 7: // SPS
                 sps_ptr = &nalu;
                 _sps_cache.assign(nalu.data, nalu.data + nalu.size);
-                std::cout << "保存SPS，大小=" << _sps_cache.size() << ", 前4字节: "
-                        << std::hex << std::uppercase << std::setfill('0') << std::setw(2)
-                        << static_cast<int>(_sps_cache[0]) << " "
-                        << static_cast<int>(_sps_cache[1]) << " "
-                        << static_cast<int>(_sps_cache[2]) << " "
-                        << static_cast<int>(_sps_cache[3]) << std::dec << std::endl;
+                _logger.dBox()
+                       .addFmt("保存SPS，大小=%zu", _sps_cache.size())
+                       .addFmt("所有字节: %s", Utils::get()->bytesToHex(_sps_cache, _sps_cache.size()).c_str())
+                       .print();
                 break;
             case 8: // PPS
                 pps_ptr = &nalu;
                 _pps_cache.assign(nalu.data, nalu.data + nalu.size);
-                std::cout << "保存PPS，大小=" << _pps_cache.size() << std::endl;
+                _logger.dBox()
+                       .addFmt("保存PPS，大小=%zu", _pps_cache.size())
+                       .addFmt("所有字节: %s", Utils::get()->bytesToHex(_pps_cache, _pps_cache.size()).c_str())
+                       .print();
                 break;
             default:
                 break;
@@ -192,17 +188,17 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
     // 等待接收到第一个IDR帧才开始处理
     if (_is_waiting_for_idr) {
         if (idr_frames.empty()) {
-            std::cout << "[VIDEO] Waiting for first IDR frame, dropping current frame" << std::endl;
+            _logger.i("Waiting for first IDR frame, dropping current frame");
             return;
         }
         _is_waiting_for_idr = false;
-        std::cout << "[VIDEO] First IDR received, stream started" << std::endl;
+        _logger.i("First IDR frame received, starting stream");
     }
 
     // 如果是关键帧，先打包 SPS+PPS+IDR
     if (!idr_frames.empty()) {
-        std::cout << "┌─────────────────────────────────────┐" << std::endl;
-        std::cout << "处理IDR帧，共 " << idr_frames.size() << " 个" << std::endl;
+        auto box = _logger.dBox();
+        box.addFmt("处理IDR帧，共 %zu 个", idr_frames.size());
 
         std::vector<uint8_t> pes_payload;
 
@@ -229,38 +225,27 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
         }
 
         if (!sps_data || !pps_data) {
-            std::cerr << "No SPS/PPS available, dropping IDR frame" << std::endl;
+            _logger.e("No SPS/PPS available, dropping IDR frame");
             return;
         }
 
         // 添加 SPS（带起始码）
         pes_payload.insert(pes_payload.end(), {0x00, 0x00, 0x00, 0x01});
         pes_payload.insert(pes_payload.end(), sps_data, sps_data + sps_size);
-        std::cout << "添加SPS后 pes_payload 大小=" << pes_payload.size() << std::endl;
 
         // 添加 PPS（带起始码）
         pes_payload.insert(pes_payload.end(), {0x00, 0x00, 0x00, 0x01});
         pes_payload.insert(pes_payload.end(), pps_data, pps_data + pps_size);
-        std::cout << "添加PPS后 pes_payload 大小=" << pes_payload.size() << std::endl;
 
         // 添加所有IDR帧（带起始码）
         for (const auto& idr : idr_frames) {
             pes_payload.insert(pes_payload.end(), {0x00, 0x00, 0x00, 0x01});
             pes_payload.insert(pes_payload.end(), idr.data, idr.data + idr.size);
-            std::cout << "添加IDR后 pes_payload 大小=" << pes_payload.size() << std::endl;
         }
 
         // 打印最终的PES payload前64字节
-        std::string payload_str;
-        size_t print_len = pes_payload.size() < 64 ? pes_payload.size() : 64;
-        payload_str.reserve(print_len * 3);
-        for (size_t i = 0; i < print_len; i++) {
-            char hex_byte[4];
-            snprintf(hex_byte, sizeof(hex_byte), "%02X ", pes_payload[i]);
-            payload_str += hex_byte;
-        }
-        std::cout << "最终PES payload前" << print_len << "字节: " << payload_str.c_str() << std::endl;
-        std::cout << "└─────────────────────────────────────┘" << std::endl;
+        const size_t print_len = pes_payload.size() < 64 ? pes_payload.size() : 64;
+        box.addFmt("最终 PES 载荷前%zu字节: ", print_len).add(Utils::get()->bytesToHex(pes_payload, print_len)).print();
 
         // 封装IDR帧为PES包（标记为关键帧）
         buildPesPacket(VIDEO_STREAM_ID, pes_payload.data(), pes_payload.size(), pts_90k, true);
@@ -280,17 +265,16 @@ void PsMuxer::writeVideoFrame(const uint8_t* h264_data, const uint64_t pts_90k, 
             buildPesPacket(VIDEO_STREAM_ID, pes_payload.data(), pes_payload.size(), pts_90k, false);
         }
     } else {
-        std::cerr << "没有IDR帧也没有P帧" << std::endl;
+        _logger.w("没有IDR帧也没有P帧");
     }
 }
 
 void PsMuxer::writeAudioFrame(const uint8_t* pcm_data, const uint64_t pts_90k, const size_t len) {
-    std::lock_guard<std::mutex> lock(_muxer_mutex);
-
     if (!_is_idr_sent) {
-        std::cerr << "[AUDIO] Waiting for first video IDR" << std::endl;
         return;
     }
+
+    std::lock_guard<std::mutex> lock(_muxer_mutex);
 
     // 计算样本数
     const size_t samples = len / sizeof(uint8_t);
@@ -318,5 +302,5 @@ void PsMuxer::release() {
     _is_waiting_for_idr = true;
     _is_idr_sent = false;
 
-    std::cout << "PsMuxer released" << std::endl;
+    _logger.i("PsMuxer released");
 }

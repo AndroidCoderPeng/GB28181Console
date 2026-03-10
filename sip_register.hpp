@@ -2,8 +2,8 @@
 // Created by pengx on 2025/9/29.
 //
 
-#ifndef SIP_REGISTER_HPP
-#define SIP_REGISTER_HPP
+#ifndef GB28181CONSOLE_SIP_REGISTER_HPP
+#define GB28181CONSOLE_SIP_REGISTER_HPP
 
 #include <atomic>
 #include <functional>
@@ -14,7 +14,7 @@
 #include "pugixml.hpp"
 
 #include "sdp_parser.hpp"
-#include "audio_receiver.hpp"
+#include "audio/audio_receiver.hpp"
 
 class SipRegister {
 public:
@@ -208,4 +208,4 @@ private:
     std::string current_register_state() const;
 };
 
-#endif //SIP_REGISTER_HPP
+#endif //GB28181CONSOLE_SIP_REGISTER_HPP

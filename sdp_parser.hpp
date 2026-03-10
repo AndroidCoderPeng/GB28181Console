@@ -2,12 +2,14 @@
 // Created by pengx on 2025/9/26.
 //
 
-#ifndef GB28181_SDP_PARSER_HPP
-#define GB28181_SDP_PARSER_HPP
+#ifndef GB28181CONSOLE_SDP_PARSER_HPP
+#define GB28181CONSOLE_SDP_PARSER_HPP
 
-#include <string>
-#include <regex>
 #include <map>
+#include <regex>
+#include <string>
+
+#include "logger.hpp"
 
 struct SdpStruct {
     std::string remote_host;
@@ -21,7 +23,18 @@ struct SdpStruct {
 
 class SdpParser {
 public:
-    static SdpStruct parse(const std::string& sdp);
+    explicit SdpParser();
+
+    static SdpParser* get() {
+        static SdpParser instance;
+        return &instance;
+    }
+
+    SdpParser(const SdpParser&) = delete;
+
+    SdpParser& operator=(const SdpParser&) = delete;
+
+    SdpStruct parse(const std::string& sdp);
 
     /**
      * 构建上行推流 SDP Answer
@@ -29,9 +42,9 @@ public:
      * @param local_ip
      * @param ssrc 流标识
      */
-    static std::string buildUpstreamSdp(const std::string& device_code,
-                                        const std::string& local_ip,
-                                        const std::string& ssrc);
+    std::string buildUpstreamSdp(const std::string& device_code,
+                                 const std::string& local_ip,
+                                 const std::string& ssrc);
 
     /**
      * 构建下行音频 SDP Answer
@@ -40,11 +53,15 @@ public:
      * @param local_port
      * @param alaw
      */
-    static std::string buildDownstreamSdp(const std::string& device_code,
-                                          const std::string& local_ip,
-                                          uint16_t local_port,
-                                          bool alaw);
+    std::string buildDownstreamSdp(const std::string& device_code,
+                                   const std::string& local_ip,
+                                   uint16_t local_port,
+                                   bool alaw);
+
+private:
+    Logger _logger;
+    SdpStruct _sdp_struct{};
 };
 
 
-#endif //GB28181_SDP_PARSER_HPP
+#endif //GB28181CONSOLE_SDP_PARSER_HPP

@@ -2,17 +2,18 @@
 // Created by peng on 2025/12/20.
 //
 
-#ifndef GB28181_RTP_SENDER_HPP
-#define GB28181_RTP_SENDER_HPP
+#ifndef GB28181CONSOLE_RTP_SENDER_HPP
+#define GB28181CONSOLE_RTP_SENDER_HPP
 
 #include <netinet/in.h>
 #include <mutex>
 
+#include "logger.hpp"
 #include "sdp_parser.hpp"
 
 class RtpSender {
 public:
-    explicit RtpSender() = default;
+    explicit RtpSender();
 
     static RtpSender* get() {
         static RtpSender instance;
@@ -23,7 +24,9 @@ public:
 
     RtpSender& operator=(const RtpSender&) = delete;
 
-    bool initialize(const SdpStruct& sdp);
+    bool initTcpSocket(const SdpStruct& sdp);
+
+    bool initUdpSocket(const SdpStruct& sdp);
 
     /**
      * 发送 PS 数据包
@@ -43,9 +46,16 @@ private:
     static constexpr size_t MAX_RTP_PAYLOAD = 1400;                // 单个 PS 包的最大尺寸
     static constexpr size_t MAX_RTP_PACKET = 12 + MAX_RTP_PAYLOAD; // 完整 RTP 包最大长度（1412）
 
-    int _rtp_socket = -1; // 用于发送数据的socket
+    Logger _logger;
+
+    int _rtp_socket = -1;
+    bool _is_tcp = false;
+
+    // udp 目标地址
+    sockaddr_in _remote_addr{};
+
     std::mutex _buffer_mutex{};
-    uint8_t _rtp_buffer[MAX_RTP_PACKET];
+    uint8_t _rtp_buffer[MAX_RTP_PACKET]{};
     uint32_t _ssrc = 0x12345678;
     uint16_t _seq = 0;
     uint8_t _payload_type = 96; // PS流的 payload type
@@ -53,9 +63,9 @@ private:
     /**
      * 初始化 SSRC 和 Seq
      *
-     * @param sdp SDP
+     * @param ssrc
      */
-    void init_ssrc_seq(const SdpStruct& sdp);
+    void init_ssrc_seq(const std::string& ssrc);
 
     /**
      * 发送 RTP 包
@@ -63,7 +73,7 @@ private:
      * @param rtp_packet RTP 包
      * @param rtp_len RTP 包长度
      */
-    void send_packet(const uint8_t* rtp_packet, size_t rtp_len) const;
+    void send_packet(const uint8_t* rtp_packet, size_t rtp_len);
 };
 
-#endif //GB28181_RTP_SENDER_HPP
+#endif //GB28181CONSOLE_RTP_SENDER_HPP

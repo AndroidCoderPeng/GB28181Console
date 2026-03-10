@@ -3,11 +3,11 @@
 //
 
 #include "frame_encoder.hpp"
+
+#include <opencv2/imgproc.hpp>
+
 #include "base_config.hpp"
 #include "ps_muxer.hpp"
-
-#include <iostream>
-#include <opencv2/imgproc.hpp>
 
 extern "C" {
 #include <libavutil/frame.h>
@@ -16,14 +16,14 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-FrameEncoder::FrameEncoder(const size_t bufferSize) {
+FrameEncoder::FrameEncoder(const size_t bufferSize) : _logger("FrameEncoder") {
     _ringBuffer.capacity = bufferSize;
     _ringBuffer.frames.resize(bufferSize);
 
     // 初始化FFmpeg
     const AVCodec* codecPtr = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!codecPtr) {
-        std::cerr << "H.264 codec not found" << std::endl;
+        _logger.e("H.264 codec not found");
         return;
     }
 
@@ -41,7 +41,7 @@ FrameEncoder::FrameEncoder(const size_t bufferSize) {
     av_opt_set(_codec_ctx_ptr->priv_data, "tune", "zerolatency", 0);
 
     if (avcodec_open2(_codec_ctx_ptr, codecPtr, nullptr) < 0) {
-        std::cerr << "Could not open codec" << std::endl;
+        _logger.e("Could not open codec");
         return;
     }
 
@@ -92,7 +92,7 @@ void FrameEncoder::pushFrame(const cv::Mat& frame) {
 
 void FrameEncoder::start() {
     _is_running = true;
-    _encode_thread_ptr = new std::thread(&FrameEncoder::encode_loop, this);
+    _encode_thread_ptr = std::make_unique<std::thread>(&FrameEncoder::encode_loop, this);
 }
 
 void FrameEncoder::encode_loop() {
@@ -127,7 +127,7 @@ void FrameEncoder::encode_loop() {
 void FrameEncoder::encode_frame(const cv::Mat& frame) const {
     // 确保AVFrame可写
     if (av_frame_make_writable(_frame_ptr) < 0) {
-        std::cerr << "Could not make frame writable" << std::endl;
+        _logger.e("Could not make frame writable");
         return;
     }
 
@@ -139,7 +139,7 @@ void FrameEncoder::encode_frame(const cv::Mat& frame) const {
 
     // 发送帧给编码器
     if (avcodec_send_frame(_codec_ctx_ptr, _frame_ptr) < 0) {
-        std::cerr << "Error sending frame to encoder" << std::endl;
+        _logger.e("Error sending frame to encoder");
         return;
     }
 
@@ -157,8 +157,7 @@ void FrameEncoder::stop() {
     _encode_cv.notify_all();
     if (_encode_thread_ptr && _encode_thread_ptr->joinable()) {
         _encode_thread_ptr->join();
-        delete _encode_thread_ptr;
-        _encode_thread_ptr = nullptr;
+        _encode_thread_ptr.reset();
     }
 }
 

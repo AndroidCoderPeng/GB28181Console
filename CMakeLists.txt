@@ -45,27 +45,50 @@ endforeach ()
 # 查找 OpenCV
 find_package(OpenCV REQUIRED)
 
-add_executable(GB28181Console
-        # 入口类
+# 基础源文件
+set(BASE_SOURCES
         main.cpp
-
-        # 核心业务类
         frame_capture.cpp
-        frame_encoder.cpp
         pugixml.cpp
         xml_builder.cpp
         sdp_parser.cpp
         rtp_sender.cpp
-        sip_register.cpp
         utils.cpp
-        h264_splitter.cpp
-        header_builder.cpp
-        audio_processor.cpp
-        ps_muxer.cpp
-        audio_receiver.cpp
-        error_code.cpp
-        ring_buffer.cpp
+#        stream_worker.cpp
+        logger.cpp
 )
+
+# SIP模块源文件
+set(SIP_SOURCES
+        sip/sip_manager.cpp
+        sip/sip_context.cpp
+        sip/register_manager.cpp
+        sip/heartbeat_manager.cpp
+        sip/event_dispatcher.cpp
+        sip/stream_manager.cpp
+        sip/response_sender.cpp
+)
+
+# 视频模块源文件
+set(VIDEO_SOURCES
+        video/frame_encoder.cpp
+        video/h264_splitter.cpp
+        video/header_builder.cpp
+        video/ps_muxer.cpp
+)
+
+# 音频模块源文件
+set(AUDIO_SOURCES
+        audio/audio_processor.cpp
+        audio/audio_receiver.cpp
+        audio/ring_buffer.cpp
+)
+
+# 合并所有源文件
+set(ALL_SOURCES ${BASE_SOURCES} ${SIP_SOURCES} ${VIDEO_SOURCES} ${AUDIO_SOURCES})
+
+# 创建单一的目标
+add_executable(${CMAKE_PROJECT_NAME} ${ALL_SOURCES})
 
 target_link_libraries(GB28181Console
         #        sip
@@ -87,3 +110,11 @@ target_link_libraries(GB28181Console
         #        opencv
         ${OpenCV_LIBS}
 )
+
+# 包含头文件路径
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        /usr/local/include
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/sip
+        ${CMAKE_CURRENT_SOURCE_DIR}/video
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio)

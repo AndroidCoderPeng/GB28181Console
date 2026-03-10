@@ -5,10 +5,10 @@
 #ifndef GB28181CONSOLE_PS_MUXER_HPP
 #define GB28181CONSOLE_PS_MUXER_HPP
 
-#pragma once
-
 #include <mutex>
 #include <vector>
+
+#include "logger.hpp"
 
 /**
  * PS 的基本单位包括：
@@ -18,7 +18,7 @@
  * */
 class PsMuxer {
 public:
-    explicit PsMuxer() = default;
+    explicit PsMuxer();
 
     static PsMuxer* get() {
         static PsMuxer instance;
@@ -36,6 +36,7 @@ public:
     void release();
 
 private:
+    Logger _logger;
     std::vector<uint8_t> _sps_cache{};
     std::vector<uint8_t> _pps_cache{};
     bool _is_waiting_for_idr = true; // 等待接收IDR帧

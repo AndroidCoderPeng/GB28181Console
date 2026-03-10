@@ -10,26 +10,30 @@
 #include <string>
 #include <thread>
 
+#include "logger.hpp"
 #include "ring_buffer.hpp"
 
 class AudioReceiver {
 public:
+    explicit AudioReceiver();
+
     ~AudioReceiver();
 
     using AudioDataCallback = std::function<void(uint8_t* buffer, size_t len)>;
 
     int initialize();
 
-    bool connectPlatform(const std::string& server_ip, uint16_t server_port) const;
+    bool connectPlatform(const std::string& server_ip, uint16_t server_port);
 
     void start(AudioDataCallback callback);
 
     void stop();
 
 private:
+    Logger _logger;
     int _receive_socket_fd = -1;
     std::atomic<bool> _is_thread_running{false};
-    std::thread _receive_thread;
+    std::unique_ptr<std::thread> _receive_thread_ptr;
     AudioDataCallback _audio_callback;
 
     // 环形缓冲区（256KB，可存储约1.6秒的PCMA数据@128kbps）

@@ -3,11 +3,15 @@
 //
 
 #include "xml_builder.hpp"
-#include <sstream>
+
 #include <iomanip>
-#include <iostream>
+#include <sstream>
 
 #include "pugixml.hpp"
+
+XmlBuilder::XmlBuilder() : _logger("XmlBuilder") {
+    _logger.i("XmlBuilder created");
+}
 
 /**
  * 添加通用 XML 声明: <?xml version="1.0" encoding="GB2312"?>
@@ -22,12 +26,12 @@ static void add_xml_declaration(pugi::xml_document& doc) {
 std::string XmlBuilder::buildDeviceInfo(const std::string& sn, const std::string& device_code,
                                         const std::string& device_name,
                                         const std::string& serial_number) {
-    std::cout << "┌──────────────────────────────────────┐" << std::endl;
-    std::cout << "│  构建设备信息 XML" << std::endl;
-    std::cout << "│  CmdType: DeviceInfo" << std::endl;
-    std::cout << "│  SN: " << sn.c_str() << std::endl;
-    std::cout << "│  DeviceID: " << device_code.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.dBox()
+            .add("构建设备信息 XML")
+            .add("CmdType: DeviceInfo")
+            .addFmt("SN: %s", sn.c_str())
+            .addFmt("DeviceID: %s", device_code.c_str())
+            .print();
 
     pugi::xml_document xml;
 
@@ -52,20 +56,18 @@ std::string XmlBuilder::buildDeviceInfo(const std::string& sn, const std::string
     xml.save(oss, "  ", pugi::format_default, pugi::encoding_utf8);
     std::string result = oss.str();
 
-    std::cout << "┌─────────── DeviceInfo XML ───────────┐" << std::endl;
-    std::cout << result.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.dBox().addBlock(result).print();
     return result;
 }
 
 std::string XmlBuilder::buildCatalog(const std::string& sn, const std::string& device_code,
                                      const std::string& server_domain, double longitude, double latitude) {
-    std::cout << "┌──────────────────────────────────────┐" << std::endl;
-    std::cout << "│  构建设备目录 XML" << std::endl;
-    std::cout << "│  CmdType: Catalog" << std::endl;
-    std::cout << "│  SN: " << sn.c_str() << std::endl;
-    std::cout << "│  DeviceID: " << device_code.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.dBox()
+            .add("构建设备目录 XML")
+            .add("CmdType: Catalog")
+            .addFmt("SN: %s", sn.c_str())
+            .addFmt("DeviceID: %s", device_code.c_str())
+            .print();
 
     pugi::xml_document xml;
 
@@ -118,19 +120,17 @@ std::string XmlBuilder::buildCatalog(const std::string& sn, const std::string& d
     xml.save(oss, "  ", pugi::format_default, pugi::encoding_utf8);
     std::string result = oss.str();
 
-    std::cout << "┌──────────── Catalog XML ─────────────┐" << std::endl;
-    std::cout << result.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.dBox().addBlock(result).print();
     return result;
 }
 
 std::string XmlBuilder::buildHeartbeat(const std::string& sn, const std::string& device_code) {
-    std::cout << "┌──────────────────────────────────────┐" << std::endl;
-    std::cout << "│  构建心跳 XML" << std::endl;
-    std::cout << "│  CmdType: Keepalive" << std::endl;
-    std::cout << "│  SN: " << sn.c_str() << std::endl;
-    std::cout << "│  DeviceID: " << device_code.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.dBox()
+            .add("构建心跳 XML")
+            .add("CmdType: Keepalive")
+            .addFmt("SN: %s", sn.c_str())
+            .addFmt("DeviceID: %s", device_code.c_str())
+            .print();
 
     pugi::xml_document xml;
 
@@ -150,8 +150,6 @@ std::string XmlBuilder::buildHeartbeat(const std::string& sn, const std::string&
     xml.save(oss, "  ", pugi::format_default, pugi::encoding_utf8);
     std::string result = oss.str();
 
-    std::cout << "┌─────────── Keepalive XML ────────────┐" << std::endl;
-    std::cout << result.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.dBox().addBlock(result).print();
     return result;
 }

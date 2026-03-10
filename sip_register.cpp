@@ -17,7 +17,7 @@
 #include "rtp_sender.hpp"
 #include "utils.hpp"
 #include "error_code.hpp"
-#include "audio_processor.hpp"
+#include "audio/audio_processor.hpp"
 
 #define SIP_PORT 5060
 

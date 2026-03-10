@@ -97,7 +97,8 @@ std::vector<uint8_t> HeaderBuilder::buildSystemHeader(const uint8_t video_stream
     return {system_header, system_header + sizeof(system_header)};
 }
 
-std::vector<uint8_t> HeaderBuilder::buildPsMap() {
+std::vector<uint8_t> HeaderBuilder::buildPsMap(const uint8_t video_stream_type, const uint8_t video_stream_id,
+                                               const uint8_t audio_stream_type, const uint8_t audio_stream_id) {
     std::vector<uint8_t> psm;
 
     // 起始码和 PS Map ID
@@ -128,14 +129,14 @@ std::vector<uint8_t> HeaderBuilder::buildPsMap() {
     const size_t es_map_start = psm.size();
 
     // 视频流信息
-    psm.push_back(STREAM_TYPE_H264);
-    psm.push_back(VIDEO_STREAM_ID);
+    psm.push_back(video_stream_type);
+    psm.push_back(video_stream_id);
     psm.push_back(0x00); // ES Info Length (高字节)
     psm.push_back(0x00); // ES Info Length (低字节)
 
     // 音频流信息
-    psm.push_back(STREAM_TYPE_G711);
-    psm.push_back(AUDIO_STREAM_ID);
+    psm.push_back(audio_stream_type);
+    psm.push_back(audio_stream_id);
     psm.push_back(0x00); // ES Info Length (高字节)
     psm.push_back(0x00); // ES Info Length (低字节)
 
@@ -157,7 +158,7 @@ std::vector<uint8_t> HeaderBuilder::buildPsMap() {
     psm[length_pos + 1] = psm_length & 0xFF;
 
     // CRC32校验【4字节】(从 PS Map ID 之后到 CRC 之前的所有字节)
-    const uint32_t crc = Utils::calculateCRC32(psm, 4, crc_pos - 4);
+    const uint32_t crc = Utils::get()->calculateCRC32(psm, 4, crc_pos - 4);
     psm[crc_pos] = (crc >> 24) & 0xFF;
     psm[crc_pos + 1] = (crc >> 16) & 0xFF;
     psm[crc_pos + 2] = (crc >> 8) & 0xFF;

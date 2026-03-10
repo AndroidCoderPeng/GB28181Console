@@ -8,7 +8,7 @@
 #include <chrono>
 
 FrameCapture::FrameCapture(const int index, const CameraErrorCallback& error_callback,
-                           const CameraFrameCallback& frame_callback) {
+                           const CameraFrameCallback& frame_callback) : _logger("FrameCapture") {
     _index = index;
     _error_callback = error_callback;
     _frame_callback = frame_callback;
@@ -25,7 +25,7 @@ void FrameCapture::start() {
     _cap.set(cv::CAP_PROP_FPS, VIDEO_FPS);
 
     _is_running = true;
-    _thread_ptr = new std::thread(&FrameCapture::capture_loop, this);
+    _thread_ptr = std::make_unique<std::thread>(&FrameCapture::capture_loop, this);
 }
 
 void FrameCapture::capture_loop() {
@@ -54,8 +54,7 @@ void FrameCapture::stop() {
     _is_running = false;
     if (_thread_ptr && _thread_ptr->joinable()) {
         _thread_ptr->join();
-        delete _thread_ptr;
-        _thread_ptr = nullptr;
+        _thread_ptr.reset();
     }
 
     if (_cap.isOpened()) {

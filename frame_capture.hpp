@@ -5,10 +5,12 @@
 #ifndef GB28181CONSOLE_FRAME_CAPTURE_HPP
 #define GB28181CONSOLE_FRAME_CAPTURE_HPP
 
-#include <opencv2/opencv.hpp>
 #include <atomic>
-#include <thread>
 #include <functional>
+#include <thread>
+#include <opencv2/opencv.hpp>
+
+#include "logger.hpp"
 
 class FrameCapture {
 public:
@@ -25,9 +27,10 @@ public:
     void stop();
 
 private:
+    Logger _logger;
     int _index{0};
     cv::VideoCapture _cap;
-    std::thread* _thread_ptr{nullptr};
+    std::unique_ptr<std::thread> _thread_ptr = nullptr;
     std::atomic<bool> _is_running{false};
 
     // 回调函数

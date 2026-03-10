@@ -4,19 +4,22 @@
 #include <condition_variable>
 
 #include "frame_capture.hpp"
-#include "frame_encoder.hpp"
+#include "video/frame_encoder.hpp"
 #include "sip_register.hpp"
 #include "base_config.hpp"
 #include "ps_muxer.hpp"
 
-static FrameCapture* frame_capture_ptr = nullptr;
-static std::thread* capture_thread_ptr = nullptr;
-static FrameEncoder* frame_encoder_ptr = nullptr;
-static SipRegister* sip_register_ptr = nullptr;
+static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
+
+static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
+static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
+static std::unique_ptr<FrameEncoder> frame_encoder_ptr = nullptr;
+static std::unique_ptr<SipRegister> sip_register_ptr = nullptr;
+
 static std::atomic<bool> is_app_running{true};
 static std::atomic<bool> is_push_stream{false};
 static std::atomic<uint32_t> frame_count{0};
-static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
+
 static std::mutex exit_mutex;
 static std::condition_variable exit_cv;
 
@@ -88,13 +91,13 @@ void cleanup() {
     }
     if (capture_thread_ptr && capture_thread_ptr->joinable()) {
         capture_thread_ptr->join();
-        delete capture_thread_ptr;
+        capture_thread_ptr.reset();
     }
-    delete frame_capture_ptr;
+    frame_capture_ptr.reset();
 
     if (frame_encoder_ptr) {
         frame_encoder_ptr->stop();
-        delete frame_encoder_ptr;
+        frame_encoder_ptr.reset();
     }
 
     std::cout << "Cleanup completed." << std::endl;
@@ -106,7 +109,7 @@ int main() {
     // 设置输出缓冲，确保能立即看到输出
     std::cout << std::unitbuf;
 
-    frame_encoder_ptr = new FrameEncoder(VIDEO_FPS);
+    frame_encoder_ptr = std::make_unique<FrameEncoder>(VIDEO_FPS);
     frame_encoder_ptr->setH264DataCallback([](const std::vector<uint8_t>& h264) {
         if (h264.empty()) {
             return;
@@ -124,28 +127,27 @@ int main() {
     std::cout << "Frame encoder started" << std::endl;
 
     // 摄像头采集
-    frame_capture_ptr = new FrameCapture(0,
-                                         [](const std::string& error) {
-                                             handle_camera_error(error);
-                                         },
-                                         [](const cv::Mat& frame) {
-                                             handle_camera_frame(frame);
-                                         });
-    capture_thread_ptr = new std::thread(&FrameCapture::start, frame_capture_ptr);
+    frame_capture_ptr = std::make_unique<FrameCapture>(0, [](const std::string& error) {
+                                                           handle_camera_error(error);
+                                                       },
+                                                       [](const cv::Mat& frame) {
+                                                           handle_camera_frame(frame);
+                                                       });
+    capture_thread_ptr = std::make_unique<std::thread>(&FrameCapture::start, frame_capture_ptr.get());
     std::cout << "Camera capturing started" << std::endl;
 
     // Sip注册
-    sip_register_ptr = new SipRegister("192.168.3.131",
-                                       "111.198.10.15",
-                                       22117,
-                                       "11010800002000000002",
-                                       "1101080000",
-                                       "11010800001300011118",
-                                       "",
-                                       "L1300011118",
-                                       "1234qwer",
-                                       116.3975,
-                                       39.9085);
+    sip_register_ptr = std::make_unique<SipRegister>("192.168.3.131",
+                                                     "111.198.10.15",
+                                                     22117,
+                                                     "11010800002000000002",
+                                                     "1101080000",
+                                                     "11010800001300011118",
+                                                     "",
+                                                     "L1300011118",
+                                                     "1234qwer",
+                                                     116.3975,
+                                                     39.9085);
     sip_register_ptr->doRegister([](const int code, const std::string& message) {
                                      handle_sip_message(code, message);
                                  },

@@ -20,7 +20,8 @@ public:
     /**
      * PSM除了CRC-32之外的其他各个字节在内容（流类型、ID、长度、头部）确定的情况下，都是固定不变的
      */
-    static std::vector<uint8_t> buildPsMap();
+    static std::vector<uint8_t> buildPsMap(uint8_t video_stream_type, uint8_t video_stream_id,
+                                           uint8_t audio_stream_type, uint8_t audio_stream_id);
 
     static std::vector<uint8_t> buildPsPackHeader(uint64_t pts_90k);
 };

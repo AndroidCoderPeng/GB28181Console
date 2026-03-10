@@ -4,9 +4,12 @@
 
 #include "h264_splitter.hpp"
 
-#include <iostream>
+H264Splitter::H264Splitter() : _logger("H264Splitter") {
+    _logger.i("H264Splitter created");
+}
 
-int H264Splitter::splitH264Frame(const uint8_t* frame, const size_t frame_size, std::vector<NALU>& nalu_vector) {
+size_t H264Splitter::splitH264Frame(const uint8_t* frame, const size_t frame_size,
+                                    std::vector<NALU>& nalu_vector) const {
     if (frame == nullptr || frame_size == 0) {
         return 0;
     }
@@ -45,7 +48,7 @@ int H264Splitter::splitH264Frame(const uint8_t* frame, const size_t frame_size, 
 
     // 如果没找到起始码
     if (start_positions.empty()) {
-        std::cerr << "未找到任何起始码" << std::endl;
+        _logger.e("未找到任何起始码");
         return 0;
     }
 

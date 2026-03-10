@@ -8,6 +8,8 @@
 #include <vector>
 #include <cstdint>
 
+#include "logger.hpp"
+
 /**
  * @brief NALU 结构体，用于存储单个 NALU 数据
  * 1: 非 IDR 图像的编码条带
@@ -24,6 +26,17 @@ struct NALU {
 
 class H264Splitter {
 public:
+    explicit H264Splitter();
+
+    static H264Splitter *get() {
+        static H264Splitter instance;
+        return &instance;
+    }
+
+    H264Splitter(const H264Splitter &) = delete;
+
+    H264Splitter &operator=(const H264Splitter &) = delete;
+
     /**
      * @brief 分割 H.264 帧为多个 NALU
      * @param frame H.264 帧数据指针
@@ -31,7 +44,10 @@ public:
      * @param nalu_vector 输出参数，存储分割后的 NALU 列表
      * @return 分割出的 NALU 数量
      */
-    static int splitH264Frame(const uint8_t* frame, size_t frame_size, std::vector<NALU>& nalu_vector);
+    size_t splitH264Frame(const uint8_t *frame, size_t frame_size, std::vector<NALU> &nalu_vector) const;
+
+private:
+    Logger _logger;
 };
 
 

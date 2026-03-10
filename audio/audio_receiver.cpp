@@ -3,10 +3,10 @@
 //
 
 #include "audio_receiver.hpp"
+
 #include <chrono>
 #include <cstring>
 #include <fcntl.h>
-#include <iostream>
 #include <thread>
 #include <unistd.h>
 #include <utility>
@@ -19,6 +19,8 @@
 #define G711_FRAME_SIZE 160
 #define RING_BUFFER_SIZE (256 * 1024)  // 256KB环形缓冲
 
+AudioReceiver::AudioReceiver() : _logger("AudioReceiver") {}
+
 AudioReceiver::~AudioReceiver() {
     stop();
 }
@@ -26,7 +28,7 @@ AudioReceiver::~AudioReceiver() {
 int AudioReceiver::initialize() {
     _receive_socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (_receive_socket_fd < 0) {
-        std::cerr << "创建 TCP socket 失败" << strerror(errno) << std::endl;
+        _logger.eFmt("创建 TCP socket 失败: %s", strerror(errno));
         return -1;
     }
 
@@ -37,7 +39,7 @@ int AudioReceiver::initialize() {
     local_addr.sin_port = htons(0);
 
     if (bind(_receive_socket_fd, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0) {
-        std::cerr << "绑定 TCP socket 失败" << strerror(errno) << std::endl;
+        _logger.eFmt("绑定 TCP socket 失败: %s", strerror(errno));
         close(_receive_socket_fd);
         _receive_socket_fd = -1;
         return -1;
@@ -50,14 +52,14 @@ int AudioReceiver::initialize() {
     if (getsockname(_receive_socket_fd, reinterpret_cast<sockaddr*>(&bound_addr), &addr_len) == 0) {
         audio_port = ntohs(bound_addr.sin_port);
     } else {
-        std::cerr << "获取 socket 名称失败" << strerror(errno) << std::endl;
+        _logger.eFmt("获取 socket 名称失败: %s", strerror(errno));
         return -1;
     }
 
     // 设置为非阻塞模式
     const int flags = fcntl(_receive_socket_fd, F_GETFL, 0);
     if (flags == -1 || fcntl(_receive_socket_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        std::cerr << "设置非阻塞模式失败" << strerror(errno) << std::endl;
+        _logger.eFmt("设置非阻塞模式失败: %s", strerror(errno));
         close(_receive_socket_fd);
         _receive_socket_fd = -1;
         return -1;
@@ -66,17 +68,20 @@ int AudioReceiver::initialize() {
     // 设置接收缓冲区大小
     constexpr int rcv_buf_size = 256 * 1024; // 256KB
     if (setsockopt(_receive_socket_fd, SOL_SOCKET, SO_RCVBUF, &rcv_buf_size, sizeof(rcv_buf_size)) < 0) {
-        std::cerr << "设置接收缓冲区失败" << strerror(errno) << std::endl;
+        _logger.eFmt("设置接收缓冲区失败: %s", strerror(errno));
     }
 
-    std::cout << "AudioReceiver socket 初始化成功，端口: " << audio_port << "，环形缓冲区: " << RING_BUFFER_SIZE / 1024 << " KB" <<
-            std::endl;
+    _logger.dBox()
+           .add("AudioReceiver socket 初始化成功")
+           .addFmt("端口: %d", audio_port)
+           .addFmt("环形缓冲区: %d KB", RING_BUFFER_SIZE / 1024)
+           .print();
     return audio_port;
 }
 
-bool AudioReceiver::connectPlatform(const std::string& server_ip, uint16_t server_port) const {
+bool AudioReceiver::connectPlatform(const std::string& server_ip, uint16_t server_port) {
     if (_receive_socket_fd <= 0) {
-        std::cerr << "socket 未初始化" << std::endl;
+        _logger.e("socket 未初始化");
         return false;
     }
 
@@ -84,13 +89,13 @@ bool AudioReceiver::connectPlatform(const std::string& server_ip, uint16_t serve
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(server_port);
     if (inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr) != 1) {
-        std::cerr << "无效的服务器地址: " << server_ip << std::endl;
+        _logger.eFmt("无效的服务器地址: %s", server_ip.c_str());
         return false;
     }
 
     int ret = connect(_receive_socket_fd, reinterpret_cast<struct sockaddr*>(&server_addr), sizeof(server_addr));
     if (ret < 0 && errno != EINPROGRESS) {
-        std::cerr << "连接平台失败: " << strerror(errno) << std::endl;
+        _logger.eFmt("连接平台失败: %s", strerror(errno));
         return false;
     }
 
@@ -106,7 +111,7 @@ bool AudioReceiver::connectPlatform(const std::string& server_ip, uint16_t serve
 
         int select_ret = select(_receive_socket_fd + 1, nullptr, &write_fds, nullptr, &timeout);
         if (select_ret <= 0) {
-            std::cerr << "连接超时或失败" << strerror(errno) << std::endl;
+            _logger.e("连接超时或失败");
             return false;
         }
 
@@ -114,18 +119,22 @@ bool AudioReceiver::connectPlatform(const std::string& server_ip, uint16_t serve
         int error = 0;
         socklen_t len = sizeof(error);
         if (getsockopt(_receive_socket_fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0 || error != 0) {
-            std::cerr << "连接失败: " << strerror(error) << std::endl;
+            _logger.eFmt("连接失败: %s", strerror(error));
             return false;
         }
     }
 
-    std::cout << "已连接平台 " << server_ip << ":" << server_port << std::endl;
+    _logger.dBox()
+           .add("已连接到平台")
+           .addFmt("IP: %s", server_ip.c_str())
+           .addFmt("端口: %d", server_port)
+           .print();
     return true;
 }
 
 void AudioReceiver::start(AudioDataCallback callback) {
     if (_receive_socket_fd <= 0) {
-        std::cerr << "socket 未初始化" << std::endl;
+        _logger.e("socket 未初始化");
         return;
     }
 
@@ -137,44 +146,44 @@ void AudioReceiver::start(AudioDataCallback callback) {
     _is_thread_running = true;
     _frame_buffer.reserve(G711_FRAME_SIZE * 10); // 预分配空间
 
-    _receive_thread = std::thread(&AudioReceiver::data_receive_loop, this);
-    std::cout << "接收线程已启动" << std::endl;
+    _receive_thread_ptr = std::make_unique<std::thread>(&AudioReceiver::data_receive_loop, this);
+    _logger.i("接收线程已启动");
 }
 
 void AudioReceiver::data_receive_loop() {
-    std::cout << "接收循环开始" << std::endl;
+    _logger.i("接收循环开始");
 
     // 临时接收缓冲区（8KB，避免频繁系统调用）
     std::vector<uint8_t> temp_buffer(8192);
 
     while (_is_thread_running.load()) {
         if (_receive_socket_fd <= 0) {
-            std::cerr << "socket已关闭，退出接收循环" << std::endl;
+            _logger.e("socket已关闭，退出接收循环");
             break;
         }
 
         // 直接读取到环形缓冲区
         size_t writable = _ring_buffer.writable_size();
         if (writable < 2048) {
-            std::cout << "环形缓冲区使用率过高，丢弃旧数据" << std::endl;
+            _logger.wFmt("环形缓冲区使用率过高(%d%%)，丢弃旧数据", 100 - (writable * 100 / RING_BUFFER_SIZE));
             _ring_buffer.discard(RING_BUFFER_SIZE / 4); // 丢弃25%
             writable = _ring_buffer.writable_size();
         }
 
         // 读取数据到临时缓冲区，然后写入环形缓冲
-        const int to_read = std::min(temp_buffer.size(), writable);
-        const int received = recv(_receive_socket_fd, temp_buffer.data(), to_read, MSG_DONTWAIT);
+        const size_t to_read = std::min(temp_buffer.size(), writable);
+        const ssize_t received = recv(_receive_socket_fd, temp_buffer.data(), to_read, MSG_DONTWAIT);
 
         if (received > 0) {
             // 写入环形缓冲区
             const size_t written = _ring_buffer.write(temp_buffer.data(), received);
             if (written != received) {
-                std::cerr << "环形缓冲区写入不完整: " << written << "/" << received << std::endl;
+                _logger.eFmt("环形缓冲区写入不完整: %d/%d", written, received);
             }
             // 处理积累的音频帧
             handle_audio_frames();
         } else if (received == 0) {
-            std::cout << "连接被平台关闭，退出接收循环" << std::endl;
+            _logger.i("连接被平台关闭，退出接收循环");
             break;
         } else {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -184,18 +193,18 @@ void AudioReceiver::data_receive_loop() {
             }
 
             if (_is_thread_running.load()) {
-                std::cout << "接收错误: " << strerror(errno) << " (fd=" << _receive_socket_fd << ")" << std::endl;
+                _logger.eFmt("接收错误: %s (fd=%d)", strerror(errno), _receive_socket_fd);
             }
 
             // 如果是致命错误，退出循环
             if (errno == EBADF || errno == EINVAL || errno == ENOTSOCK) {
-                std::cerr << "socket 已关闭或无效，退出接收循环" << std::endl;
+                _logger.e("socket 已关闭或无效，退出接收循环");
                 break;
             }
 
             // 连接相关错误：立即退出
             if (errno == ECONNRESET || errno == ENOTCONN || errno == EPIPE) {
-                std::cerr << "连接已断开，退出接收循环" << std::endl;
+                _logger.e("连接已断开，退出接收循环");
                 break;
             }
 
@@ -203,13 +212,13 @@ void AudioReceiver::data_receive_loop() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
-    std::cout << "接收线程已退出，总计处理 " << _frame_count.load() << " 帧" << std::endl;
+    _logger.dFmt("接收循环结束，总计处理 %d 帧", _frame_count.load());
 }
 
 /**
  * 平台音频结构：[03 2c][RTP头(12字节)][音频数据(多个160字节帧)]...
  * */
-void AudioReceiver::handle_audio_frames() {
+void AudioReceiver::handle_audio_frames() { // NOLINT
     if (!_audio_callback)
         return;
 
@@ -234,7 +243,7 @@ void AudioReceiver::handle_audio_frames() {
         if (!found) {
             const size_t readable = _ring_buffer.readable_size();
             if (readable > 2048) {
-                std::cout << "缓冲区堆积" << readable << "字节，丢弃前1024字节" << std::endl;
+                _logger.wFmt("未找到RTP头，缓冲区堆积%d字节，丢弃前1024字节", readable);
                 _ring_buffer.discard(1024);
             }
             break;
@@ -285,8 +294,9 @@ void AudioReceiver::stop() {
         }
 
         // 等待线程结束
-        if (_receive_thread.joinable()) {
-            _receive_thread.join();
+        if (_receive_thread_ptr->joinable()) {
+            _receive_thread_ptr->join();
+            _receive_thread_ptr.reset();
         }
 
         // 清空缓冲区
@@ -294,6 +304,6 @@ void AudioReceiver::stop() {
         _frame_buffer.clear();
         _frame_count = 0;
 
-        std::cout << "接收线程已停止" << std::endl;
+        _logger.i("接收线程已停止");
     }
 }

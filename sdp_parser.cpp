@@ -3,34 +3,34 @@
 //
 
 #include "sdp_parser.hpp"
-#include "utils.hpp"
 
-#include <iostream>
 #include <sstream>
 
-SdpStruct SdpParser::parse(const std::string& sdp) {
-    SdpStruct sdp_struct{};
+#include "utils.hpp"
 
+SdpParser::SdpParser() : _logger("SdpParser") {}
+
+SdpStruct SdpParser::parse(const std::string& sdp) {
     // 提取 c= 行的 IP【c=IN IP4 111.198.10.15】
     std::regex c_regex("c=IN IP4 ([\\d\\.]+)");
     std::smatch c_match;
     if (regex_search(sdp, c_match, c_regex) && c_match.size() > 1) {
-        sdp_struct.remote_host = c_match[1].str();
+        _sdp_struct.remote_host = c_match[1].str();
     }
 
     // 提取 m= 行【m=video 30465 TCP/RTP/AVP 96 97 98】
     std::regex m_line_regex(R"(m=(\w+)\s+(\d+)\s+([\w/]+))");
     std::smatch m_match;
     if (std::regex_search(sdp, m_match, m_line_regex) && m_match.size() > 3) {
-        sdp_struct.media_type = m_match[1].str();
-        sdp_struct.remote_port = std::stoi(m_match[2].str());
+        _sdp_struct.media_type = m_match[1].str();
+        _sdp_struct.remote_port = std::stoi(m_match[2].str());
         std::string proto = m_match[3].str();
 
         // 判断是 TCP 还是 UDP
         if (proto.find("TCP") != std::string::npos) {
-            sdp_struct.transport = "tcp";
+            _sdp_struct.transport = "tcp";
         } else {
-            sdp_struct.transport = "udp";
+            _sdp_struct.transport = "udp";
         }
     }
 
@@ -38,7 +38,7 @@ SdpStruct SdpParser::parse(const std::string& sdp) {
     std::regex setup_regex(R"(a=setup:(\w+))");
     std::smatch setup_match;
     if (std::regex_search(sdp, setup_match, setup_regex) && setup_match.size() > 1) {
-        sdp_struct.setup = setup_match[1].str();
+        _sdp_struct.setup = setup_match[1].str();
     }
 
     // 解析所有 a=rtpmap: 条目【a=rtpmap:96 PS/90000】
@@ -51,7 +51,7 @@ SdpStruct SdpParser::parse(const std::string& sdp) {
         if (match.size() > 3) {
             int payload_type = std::stoi(match[1].str());
             std::string encoding = match[2].str();
-            sdp_struct.rtp_map[payload_type] = encoding;
+            _sdp_struct.rtp_map[payload_type] = encoding;
         }
     }
 
@@ -59,10 +59,10 @@ SdpStruct SdpParser::parse(const std::string& sdp) {
     std::regex y_regex(R"(y=(\S+))");
     std::smatch y_match;
     if (std::regex_search(sdp, y_match, y_regex) && y_match.size() > 1) {
-        sdp_struct.ssrc = y_match[1].str();
+        _sdp_struct.ssrc = y_match[1].str();
     }
 
-    return sdp_struct;
+    return _sdp_struct;
 }
 
 /**
@@ -99,16 +99,15 @@ std::string SdpParser::buildUpstreamSdp(const std::string& device_code, const st
 
     std::string result = oss.str();
 
-    std::cout << "┌─────────── Upstream SDP ─────────────┐" << std::endl;
-    std::cout << result.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.d("Upstream SDP");
+    _logger.dBox().addBlock(result).print();
     return result;
 }
 
 std::string SdpParser::buildDownstreamSdp(const std::string& device_code, const std::string& local_ip,
                                           const uint16_t local_port, const bool alaw) {
     std::ostringstream oss;
-    const std::string ssrc = Utils::randomSsrc();
+    const std::string ssrc = Utils::get()->randomSsrc();
     oss << "v=0\r\n";
     oss << "o=" << device_code << " 0 0 IN IP4 " << local_ip << "\r\n";
     oss << "s=Play\r\n"
@@ -141,8 +140,7 @@ std::string SdpParser::buildDownstreamSdp(const std::string& device_code, const 
 
     std::string result = oss.str();
 
-    std::cout << "┌────────── Downstream SDP ────────────┐" << std::endl;
-    std::cout << result.c_str() << std::endl;
-    std::cout << "└──────────────────────────────────────┘" << std::endl;
+    _logger.d("Downstream SDP");
+    _logger.dBox().addBlock(result).print();
     return result;
 }
