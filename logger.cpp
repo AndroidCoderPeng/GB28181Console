@@ -58,7 +58,15 @@ void Logger::log_raw(const LogLevel level, const char* msg) const {
             levelStr = "[ERROR]";
             break;
     }
-    std::cout << color << levelStr << COLOR_RESET << " [" << _tag_ptr << "] " << msg << std::endl;
+
+    // 格式化 _tag_ptr 的宽度
+    const std::string tag_str(_tag_ptr);
+    if (tag_str.length() > TAG_MAX_WIDTH) {
+        // 超过长度时截断并添加 "..."
+        tag_str.substr(0, TAG_MAX_WIDTH - 3) + "...";
+    }
+    const auto tag = tag_str + std::string(TAG_MAX_WIDTH - tag_str.length(), ' ');
+    std::cout << color << levelStr << COLOR_RESET << " [" << tag << "] " << msg << std::endl;
 }
 
 void Logger::print_line(const std::string& content, const LogLevel level) const {

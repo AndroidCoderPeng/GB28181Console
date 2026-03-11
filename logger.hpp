@@ -104,6 +104,7 @@ public:
 
 private:
     const char* _tag_ptr;
+    static constexpr auto TAG_MAX_WIDTH = 16;
     static constexpr auto DEFAULT_WIDTH = 48;
     static constexpr auto H_LINE = "─";
     static constexpr auto V_LINE = "│";
