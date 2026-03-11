@@ -15,7 +15,6 @@ static constexpr int TIMESTAMP_BASE = 90000; // 90kHz
 static std::unique_ptr<Logger> logger_ptr = nullptr;
 static std::unique_ptr<FrameEncoder> frame_encoder_ptr = nullptr;
 static std::unique_ptr<FrameCapture> frame_capture_ptr = nullptr;
-static std::unique_ptr<std::thread> capture_thread_ptr = nullptr;
 static std::unique_ptr<SipManager> sip_manager_ptr = nullptr;
 
 static std::atomic<bool> is_app_running{true};
@@ -54,14 +53,8 @@ void cleanup() {
     if (frame_capture_ptr) {
         logger_ptr->i("Stopping frame capture...");
         frame_capture_ptr->stop();
+        frame_capture_ptr.reset();
     }
-
-    if (capture_thread_ptr && capture_thread_ptr->joinable()) {
-        logger_ptr->i("Waiting for frame encoder thread to finish...");
-        capture_thread_ptr->join();
-        capture_thread_ptr.reset();
-    }
-    frame_capture_ptr.reset();
 
     if (frame_encoder_ptr) {
         logger_ptr->i("Stopping frame encoder...");
@@ -132,15 +125,20 @@ int main() {
 
     // 摄像头采集
     frame_capture_ptr = std::make_unique<FrameCapture>(0);
-    frame_capture_ptr->setCameraCallback([](const std::string& error) {
-                                             logger_ptr->eFmt("Camera error: %s", error.c_str());
-                                         },
-                                         [](const cv::Mat& frame) {
-                                             if (frame_encoder_ptr) {
-                                                 frame_encoder_ptr->pushFrame(frame);
-                                             }
-                                         });
-    capture_thread_ptr = std::make_unique<std::thread>(&FrameCapture::start, frame_capture_ptr.get());
+    frame_capture_ptr->setCameraCallback([](const cv::Mat& frame) {
+        if (frame_encoder_ptr) {
+            frame_encoder_ptr->pushFrame(frame);
+        }
+    });
+    if (!frame_capture_ptr->start()) {
+        logger_ptr->e("Cannot open camera, application exit");
+        if (frame_encoder_ptr) {
+            logger_ptr->i("Stopping frame encoder...");
+            frame_encoder_ptr->stop();
+            frame_encoder_ptr.reset();
+        }
+        return 0;
+    }
     logger_ptr->i("Camera capturing started");
 
     // Sip注册

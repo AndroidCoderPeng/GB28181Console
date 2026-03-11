@@ -14,16 +14,15 @@
 
 class FrameCapture {
 public:
-    using CameraErrorCallback = std::function<void(const std::string&)>;
     using CameraFrameCallback = std::function<void(cv::Mat mat)>;
 
     explicit FrameCapture(int index);
 
-    void setCameraCallback(const CameraErrorCallback& error_callback, const CameraFrameCallback& frame_callback);
+    void setCameraCallback(const CameraFrameCallback& frame_callback);
 
     ~FrameCapture();
 
-    void start();
+    bool start();
 
     void stop();
 
@@ -35,7 +34,6 @@ private:
     std::atomic<bool> _is_running{false};
 
     // 回调函数
-    CameraErrorCallback _error_callback;
     CameraFrameCallback _frame_callback;
 
     void capture_loop();

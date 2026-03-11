@@ -12,16 +12,13 @@ FrameCapture::FrameCapture(const int index) : _logger("FrameCapture") {
     _logger.i("FrameCapture created");
 }
 
-void FrameCapture::setCameraCallback(const CameraErrorCallback& error_callback,
-                                     const CameraFrameCallback& frame_callback) {
-    _error_callback = error_callback;
+void FrameCapture::setCameraCallback(const CameraFrameCallback& frame_callback) {
     _frame_callback = frame_callback;
 }
 
-void FrameCapture::start() {
+bool FrameCapture::start() {
     if (!_cap.open(0, cv::CAP_V4L2)) {
-        _error_callback("Cannot open camera");
-        return;
+        return false;
     }
     // 设置参数
     _cap.set(cv::CAP_PROP_FRAME_WIDTH, VIDEO_WIDTH);
@@ -30,6 +27,7 @@ void FrameCapture::start() {
 
     _is_running = true;
     _thread_ptr = std::make_unique<std::thread>(&FrameCapture::capture_loop, this);
+    return true;
 }
 
 void FrameCapture::capture_loop() {
