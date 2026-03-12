@@ -48,7 +48,6 @@ find_package(OpenCV REQUIRED)
 # 基础源文件
 set(BASE_SOURCES
         main.cpp
-        frame_capture.cpp
         pugixml.cpp
         xml_builder.cpp
         sdp_parser.cpp
@@ -71,6 +70,7 @@ set(SIP_SOURCES
 
 # 视频模块源文件
 set(VIDEO_SOURCES
+        video/frame_capture.cpp
         video/frame_encoder.cpp
         video/h264_splitter.cpp
         video/header_builder.cpp
