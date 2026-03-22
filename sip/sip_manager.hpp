@@ -24,7 +24,7 @@ public:
 
     using PcmDataCallback = std::function<void(int16_t*, size_t)>;
 
-    using G711DataCallback = std::function<void(uint8_t*, size_t)>;
+    using G711DataCallback = std::function<void(uint8_t*, size_t, int)>;
 
     /**
      * 初始化 eXosip 栈
