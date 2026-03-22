@@ -53,8 +53,8 @@ set(BASE_SOURCES
         sdp_parser.cpp
         rtp_sender.cpp
         utils.cpp
-#        stream_worker.cpp
         logger.cpp
+        ring_buffer.cpp
 )
 
 # SIP模块源文件
@@ -81,7 +81,7 @@ set(VIDEO_SOURCES
 set(AUDIO_SOURCES
         audio/audio_processor.cpp
         audio/audio_receiver.cpp
-        audio/ring_buffer.cpp
+        audio/audio_capture.cpp
 )
 
 # 合并所有源文件

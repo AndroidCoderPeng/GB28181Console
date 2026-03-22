@@ -1,0 +1,12 @@
+//
+// Created by peng on 2026/3/22.
+//
+
+#ifndef GB28181CONSOLE_AUDIO_CAPTURE_HPP
+#define GB28181CONSOLE_AUDIO_CAPTURE_HPP
+
+
+class AudioCapture {};
+
+
+#endif //GB28181CONSOLE_AUDIO_CAPTURE_HPP

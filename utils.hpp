@@ -35,7 +35,7 @@ private:
     Logger _logger;
     std::random_device _rd;
     std::mt19937 _gen{_rd()};
-    std::uniform_int_distribution<int> _dis{100000, 999999};
+    std::uniform_int_distribution<> _dis{100000, 999999};
 };
 
 #endif //GB28181CONSOLE_UTILS_HPP
